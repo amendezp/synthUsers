@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up your workspace — NimbusNotes</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav>
+  <span class="logo">☁ NimbusNotes</span>
+  <span class="spacer"></span>
+  <a href="index.html">Back to home</a>
+</nav>
+<div class="container" style="max-width:640px">
+  <div class="progress"><span class="on"></span><span class="on"></span><span></span></div>
+  <div class="card">
+    <h2>Set up your workspace</h2>
+    <p class="section-note">Choose how NimbusNotes should work for you. You can change
+       any of these later in Settings.</p>
+    <!-- PLANTED FRICTION #2: the error is shown far from its cause and is vague. -->
+    <div class="error" id="perm-error">Please review your selections.</div>
+
+    <div class="toggles">
+      <label class="toggle"><input type="checkbox" id="opt-updates" checked>
+        <span><span class="t-label">Product updates</span><br>
+        <span class="t-desc">Occasional email about new features and improvements.</span></span></label>
+
+      <label class="toggle"><input type="checkbox" id="opt-suggestions" checked>
+        <span><span class="t-label">Smart suggestions</span><br>
+        <span class="t-desc">Let NimbusNotes suggest tags and related notes while you write.</span></span></label>
+
+      <label class="toggle"><input type="checkbox" id="opt-analytics">
+        <span><span class="t-label">Share usage analytics</span><br>
+        <span class="t-desc">Help us improve by sharing anonymous usage patterns.</span></span></label>
+
+      <label class="toggle"><input type="checkbox" id="opt-sync" checked>
+        <span><span class="t-label">Sync across devices</span><br>
+        <span class="t-desc">Keep notes updated on web, desktop and mobile in real time.</span></span></label>
+
+      <label class="toggle"><input type="checkbox" id="opt-backup" checked>
+        <span><span class="t-label">Automatic backups</span><br>
+        <span class="t-desc">Daily encrypted snapshots of your workspace, kept for 30 days.</span></span></label>
+
+      <label class="toggle"><input type="checkbox" id="opt-shortcuts">
+        <span><span class="t-label">Power shortcuts</span><br>
+        <span class="t-desc">Enable the extended keyboard shortcut set for faster editing.</span></span></label>
+
+      <!-- PLANTED FRICTION #2 (cont.): the only REQUIRED item is visually
+           identical to the optional toggles, placed last, below the fold at
+           a typical viewport height. -->
+      <label class="toggle"><input type="checkbox" id="opt-dpa">
+        <span><span class="t-label">Data Processing Agreement</span><br>
+        <span class="t-desc">I have read and agree to the NimbusNotes Data Processing
+        Agreement covering how workspace content is stored and processed.</span></span></label>
+    </div>
+
+    <p style="margin-top:26px"><button class="btn" id="perm-continue">Continue</button></p>
+  </div>
+</div>
+<script>
+document.getElementById('perm-continue').addEventListener('click', function () {
+  const err = document.getElementById('perm-error');
+  if (!document.getElementById('opt-dpa').checked) {
+    err.classList.add('show');
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // error appears at the top, cause is at the bottom
+    return;
+  }
+  window.location.href = 'plan.html';
+});
+</script>
+</body>
+</html>

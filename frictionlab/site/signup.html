@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create your account — NimbusNotes</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav>
+  <span class="logo">☁ NimbusNotes</span>
+  <span class="spacer"></span>
+  <a href="index.html">Back to home</a>
+</nav>
+<div class="container" style="max-width:560px">
+  <div class="progress"><span class="on"></span><span></span><span></span></div>
+  <div class="card">
+    <h2>Create your account</h2>
+    <div class="error" id="form-error"></div>
+    <form id="signup-form" novalidate>
+      <label for="name">Full name</label>
+      <input type="text" id="name" autocomplete="off">
+      <label for="email">Work email</label>
+      <input type="email" id="email" autocomplete="off">
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="off">
+      <!-- PLANTED FRICTION #1: the password requirements are hidden until the
+           user has already failed once. -->
+      <div class="hint" id="pw-rules">
+        Passwords must be at least 10 characters and include a number and a
+        symbol (e.g. ! # %).
+      </div>
+      <p style="margin-top:26px"><button class="btn" type="submit">Create account</button></p>
+    </form>
+  </div>
+</div>
+<script>
+document.getElementById('signup-form').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+  const err = document.getElementById('form-error');
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const pw = document.getElementById('password').value;
+  err.classList.remove('show');
+
+  if (!name || !email) {
+    err.textContent = 'Please fill in all fields.';
+    err.classList.add('show');
+    return;
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    err.textContent = "That email address doesn't look right.";
+    err.classList.add('show');
+    return;
+  }
+  const pwOk = pw.length >= 10 && /\d/.test(pw) && /[^A-Za-z0-9]/.test(pw);
+  if (!pwOk) {
+    err.textContent = "Your password doesn't meet the requirements.";
+    err.classList.add('show');
+    document.getElementById('pw-rules').classList.add('show'); // rules only appear now
+    return;
+  }
+  window.location.href = 'permissions.html';
+});
+</script>
+</body>
+</html>

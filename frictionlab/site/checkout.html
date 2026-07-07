@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checkout — NimbusNotes</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav>
+  <span class="logo">☁ NimbusNotes</span>
+  <span class="spacer"></span>
+  <a href="plan.html">Back to plans</a>
+</nav>
+<div class="container" style="max-width:560px">
+  <div class="card">
+    <h2>Payment details</h2>
+    <p class="section-note">Your 14-day free trial starts today. You'll be charged when
+       the trial ends. Cancel anytime.</p>
+    <label for="card">Card number</label>
+    <input type="text" id="card" placeholder="1234 5678 9012 3456" autocomplete="off">
+    <label for="expiry">Expiry</label>
+    <input type="text" id="expiry" placeholder="MM/YY" autocomplete="off">
+    <label for="cvc">CVC</label>
+    <input type="text" id="cvc" placeholder="123" autocomplete="off">
+    <p style="margin-top:26px"><button class="btn" onclick="alert('This is a demo — payment is disabled.')">Start trial</button></p>
+    <p class="section-note"><a href="plan.html">← Back to plans</a></p>
+  </div>
+</div>
+</body>
+</html>

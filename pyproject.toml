@@ -1,0 +1,21 @@
+[project]
+name = "synthusers"
+version = "0.1.0"
+description = "Synthetic user harness: computer-use agents that test interfaces and report friction"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.66",
+    "playwright>=1.49",
+    "pillow>=10.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+synthusers = "synthusers.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["synthusers*"]

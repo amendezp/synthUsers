@@ -1,0 +1,60 @@
+# Offline smoke test: a scripted "user" replays a realistic journey through
+# friction-lab, exercising the full pipeline (executor, cursor overlay, video,
+# trace, friction heuristics, report) without any API calls.
+name: frictionlab-smoke
+
+target:
+  url: http://127.0.0.1:8741/
+  local_app:
+    command: python3 frictionlab/serve.py --port 8741
+    ready_url: http://127.0.0.1:8741/
+
+task: |
+  Sign up for a FREE NimbusNotes account and reach the welcome screen.
+
+success:
+  url_matches: "done\\.html"
+  page_text: "You're all set"
+  judge: false
+
+runs: 1
+
+agent:
+  driver: scripted
+  max_steps: 60
+  script:
+    - { action: screenshot, reasoning: "A landing page for NimbusNotes. There's a clear 'Get started' button, I'll use that to sign up." }
+    - { action: click_selector, selector: "a.btn:has-text('Get started')", reasoning: "Clicking Get started to begin signup.", pause_s: 2 }
+    - { action: click_selector, selector: "#name", reasoning: "A signup form. I'll fill in my name first." }
+    - { action: type, text: "Alex Rivera" }
+    - { action: click_selector, selector: "#email" }
+    - { action: type, text: "alex.rivera@example.com" }
+    - { action: click_selector, selector: "#password", reasoning: "Now a password. No requirements are listed anywhere, so a normal password should do." }
+    - { action: type, text: "sunshine" }
+    - { action: click_selector, selector: "button:has-text('Create account')", pause_s: 1 }
+    - { action: screenshot, reasoning: "Hmm, it says my password doesn't meet the requirements — but the requirements were never shown before I submitted. That's confusing. Now I can see the rules: 10 characters, a number and a symbol.", pause_s: 30 }
+    - { action: click_selector, selector: "#password" }
+    - { action: key, text: "ctrl+a" }
+    - { action: type, text: "sunshine42!X" }
+    - { action: click_selector, selector: "button:has-text('Create account')", reasoning: "Trying again with a password that matches the newly revealed rules.", pause_s: 2 }
+    - { action: click_selector, selector: "#perm-continue", reasoning: "A settings page with toggles. The defaults look fine, I'll just continue.", pause_s: 3 }
+    - { action: click_selector, selector: "#perm-continue", reasoning: "It says 'Please review your selections' but I don't see what's wrong — everything here is a preference. Clicking continue again.", pause_s: 2 }
+    - { action: click_selector, selector: "#perm-continue", reasoning: "Still the same vague error. Nothing on screen tells me which selection is the problem. This is frustrating.", pause_s: 4 }
+    - { action: scroll, coordinate: [640, 400], scroll_direction: "down", scroll_amount: 5, reasoning: "Let me scroll down — maybe there is something below I missed." }
+    - { action: click_selector, selector: "#opt-dpa", reasoning: "There it is: a Data Processing Agreement checkbox at the very bottom, styled exactly like the optional toggles. Nothing marked it as required.", pause_s: 3 }
+    - { action: click_selector, selector: "#perm-continue", pause_s: 1 }
+    - { action: click_selector, selector: "a.btn:has-text('Choose Pro')", reasoning: "A pricing page. Pro is marked 'Most popular' so I guess that's the way forward — I don't see a free option here.", pause_s: 3 }
+    - { action: screenshot, reasoning: "Wait, this is asking for my card number. The task was a FREE account and the homepage said no credit card required. This doesn't seem right — I need to go back.", pause_s: 26 }
+    - { action: click_selector, selector: "a:has-text('Back to plans')", reasoning: "Going back to the plans page to look for a free option." }
+    - { action: scroll, coordinate: [640, 400], scroll_direction: "down", scroll_amount: 3, reasoning: "Scanning the page again for anything about a free plan." }
+    - { action: scroll, coordinate: [640, 400], scroll_direction: "up", scroll_amount: 3, reasoning: "I still don't see it. Checking the top again." }
+    - { action: scroll, coordinate: [640, 400], scroll_direction: "down", scroll_amount: 4, reasoning: "One more pass down the page, reading more carefully this time." }
+    - { action: click_selector, selector: ".free-skip a", reasoning: "Found it — a tiny grey link at the bottom: 'continue with the free plan for now'. Very easy to miss.", pause_s: 5 }
+    - { action: screenshot, reasoning: "The welcome screen — my workspace is ready." }
+    - { final: "DONE: I reached the welcome screen and my workspace is ready. Rough spots along the way: password rules only appeared after I failed once; the workspace setup page rejected me with a vague error because a required agreement checkbox was hidden among optional toggles below the fold; and the free-plan option on the pricing page is a barely visible text link under three big paid-plan buttons." }
+
+viewport: { width: 1280, height: 800 }
+
+personas:
+  - name: scripted-baseline
+    prompt: A deterministic scripted journey used to validate the pipeline.
