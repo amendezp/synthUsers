@@ -1,0 +1,52 @@
+# Live batch: computer-use agents attempt the NimbusNotes onboarding flow.
+# Requires ANTHROPIC_API_KEY. Cost guide: roughly $0.5-2 per run on Opus 4.8.
+name: frictionlab-onboarding
+
+target:
+  url: http://127.0.0.1:8734/
+  local_app:
+    command: python3 frictionlab/serve.py --port 8734
+    ready_url: http://127.0.0.1:8734/
+
+task: |
+  You want to try NimbusNotes, a note-taking app a colleague recommended.
+  Sign up for a FREE account — you are not willing to pay or enter any payment
+  details. You are done when you reach the welcome screen confirming your
+  workspace is ready. Use any plausible made-up name, email and password.
+
+success:
+  url_matches: "done\\.html"
+  page_text: "You're all set"
+  judge: true
+
+runs: 6
+parallel: 2
+
+agent:
+  driver: computer_use
+  model: claude-opus-4-8
+  effort: high
+  max_steps: 40
+  max_minutes: 12
+
+viewport: { width: 1280, height: 800 }
+
+personas:
+  - name: busy-professional
+    prompt: >
+      You are a 38-year-old product manager squeezing this in between meetings.
+      You skim instead of reading, click the most prominent option, and get
+      irritated fast. If something fails twice or looks like it wants your
+      credit card, you seriously consider giving up.
+  - name: cautious-newcomer
+    prompt: >
+      You are a 61-year-old teacher who is not confident with technology. You
+      read everything carefully before acting, worry about privacy (you avoid
+      sharing analytics or optional data), and re-read error messages slowly.
+      You persist, but you get anxious when the interface is unclear.
+  - name: efficient-power-user
+    prompt: >
+      You are a 27-year-old software engineer. You move fast, use keyboard
+      shortcuts like Tab between fields where natural, and have high standards —
+      you notice and comment on every piece of UX sloppiness, but you rarely
+      give up.

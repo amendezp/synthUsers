@@ -1,0 +1,396 @@
+{
+  "spec": "frictionlab-onboarding",
+  "generated_at": "2026-07-07T22:29:45.046090+00:00",
+  "target_url": "http://127.0.0.1:8734/",
+  "task": "You want to try NimbusNotes, a note-taking app a colleague recommended.\nSign up for a FREE account \u2014 you are not willing to pay or enter any payment\ndetails. You are done when you reach the welcome screen confirming your\nworkspace is ready. Use any plausible made-up name, email and password.",
+  "n_runs": 6,
+  "n_completed": 5,
+  "n_failed": 1,
+  "n_unknown": 0,
+  "n_gave_up": 0,
+  "success_rate": 0.833,
+  "median_steps": 13.0,
+  "median_steps_completed": 13,
+  "avg_duration_s": 72.8,
+  "failure_points": {
+    "Workspace setup step - paused at the required Data Processing Agreement checkbox and did not continue to the final welcome/confirmation screen.": 1
+  },
+  "friction_event_count": 24,
+  "friction_clusters": [
+    {
+      "title": "Hesitation on /permissions.html",
+      "type": "hesitation",
+      "page": "/permissions.html",
+      "count": 9,
+      "runs_affected": [
+        "run_000",
+        "run_001",
+        "run_002",
+        "run_003",
+        "run_004",
+        "run_005"
+      ],
+      "examples": [
+        {
+          "step": 9,
+          "type": "hesitation",
+          "ui_element": "Step 2 'Set up your workspace' preferences page",
+          "evidence": "These are optional settings I can change later... Let me scroll down to find the continue button.",
+          "suggestion": "Keep the primary continue/skip action visible above the fold so users don't have to scroll to find how to proceed past optional settings.",
+          "run": "run_000",
+          "source": "llm",
+          "page": "/permissions.html"
+        },
+        {
+          "step": 8,
+          "type": "hesitation",
+          "ui_element": "'Create account' button (step 1 of signup)",
+          "evidence": "deliberation=5s ... 'All three fields are filled in ... Everything looks correct, so I'll click \"Create account\"'",
+          "suggestion": "Provide inline confirmation (checkmarks or field validation) so the user doesn't have to pause to double-check all fields were captured before submitting.",
+          "run": "run_001",
+          "source": "llm",
+          "page": "/permissions.html"
+        },
+        {
+          "step": 8,
+          "type": "hesitation",
+          "ui_element": "'Create account' button (step 1 form)",
+          "evidence": "deliberation=7s before 'Now I'll click \"Create account\" to move to step 2.'",
+          "suggestion": "Ensure the primary CTA is visually obvious and confirm field validation state clearly so users don't pause to double-check before submitting.",
+          "run": "run_002",
+          "source": "llm",
+          "page": "/permissions.html"
+        },
+        {
+          "step": 10,
+          "type": "hesitation",
+          "ui_element": "'Data Processing Agreement' checkbox (permissions step)",
+          "evidence": "deliberation=9s; 'There's a required-looking \"Data Processing Agreement\" checkbox that's unchecked \u2014 I'll need to tick that to continue.'",
+          "suggestion": "Clearly mark required agreement checkboxes as mandatory with an explicit label/asterisk and inline validation, rather than making the user infer it's 'required-looking'.",
+          "run": "run_002",
+          "source": "llm",
+          "page": "/permissions.html"
+        },
+        {
+          "step": 9,
+          "type": "hesitation",
+          "ui_element": "Workspace preferences toggles (permissions step)",
+          "evidence": "deliberation=4s; 'The defaults look fine and none relate to payment, so I'll leave them and scroll down to find the continue button.'",
+          "suggestion": "Make the continue button visible without needing to scroll, or indicate that more content/options lie below the fold.",
+          "run": "run_002",
+          "source": "llm",
+          "page": "/permissions.html"
+        }
+      ]
+    },
+    {
+      "title": "Hidden Affordance on /done.html",
+      "type": "hidden_affordance",
+      "page": "/done.html",
+      "count": 4,
+      "runs_affected": [
+        "run_001",
+        "run_002",
+        "run_003",
+        "run_004"
+      ],
+      "examples": [
+        {
+          "step": 13,
+          "type": "hidden_affordance",
+          "ui_element": "'continue with the free plan for now' text link on 'Choose your plan'",
+          "evidence": "'I notice some faint grey text at the bottom: \"continue with the free plan for now.\" That's exactly what I want, even though it's easy to miss.'",
+          "suggestion": "Make the free-plan option a clearly visible button or high-contrast link of equal prominence, since burying it in faint grey text is a dark-pattern that risks users abandoning or accidentally selecting a paid plan.",
+          "run": "run_001",
+          "source": "llm",
+          "page": "/done.html"
+        },
+        {
+          "step": 13,
+          "type": "hidden_affordance",
+          "ui_element": "'continue with the free plan for now' link",
+          "evidence": "'the faint grey \"continue with the free plan for now\" link at the bottom'",
+          "suggestion": "Increase contrast and prominence of the free-plan link so it meets accessibility contrast standards and is easily discoverable.",
+          "run": "run_002",
+          "source": "llm",
+          "page": "/done.html"
+        },
+        {
+          "step": 15,
+          "type": "hidden_affordance",
+          "ui_element": "'continue with the free plan for now' link on plan page",
+          "evidence": "all three are paid, with \"Choose Pro\" being the big prominent button... Good thing there's a low-key link at the bottom: \"continue with the free plan for now.\"",
+          "suggestion": "Present the free plan as a clearly visible, equal-weight option rather than a low-key link, since the free tier is a legitimate primary path.",
+          "run": "run_003",
+          "source": "llm",
+          "page": "/done.html"
+        },
+        {
+          "step": 13,
+          "type": "hidden_affordance",
+          "ui_element": "'continue with the free plan for now' link on Choose your plan",
+          "evidence": "'I notice small, faint grey text at the bottom that says \"continue with the free plan for now.\" That's exactly what I want, though it's a bit hidden.'",
+          "suggestion": "Make the free-plan option a clearly visible button or equally weighted choice rather than faint grey text, so users not wanting to pay can find it without hunting.",
+          "run": "run_004",
+          "source": "llm",
+          "page": "/done.html"
+        }
+      ]
+    },
+    {
+      "title": "Confusion on /done.html",
+      "type": "confusion",
+      "page": "/done.html",
+      "count": 2,
+      "runs_affected": [
+        "run_002",
+        "run_004"
+      ],
+      "examples": [
+        {
+          "run": "run_002",
+          "step": 13,
+          "type": "confusion",
+          "page": "/done.html",
+          "detail": "\"\u2026bottom. That's the one I want. Slightly annoying that they've buried the free option in low-contrast text, but I'll click it.\""
+        },
+        {
+          "step": 13,
+          "type": "confusion",
+          "ui_element": "Plan selection / '14-day Pro trial' copy",
+          "evidence": "'I'm being nudged toward paid plans... It even says \"Every plan starts with a 14-day Pro trial,\" but I don't want to pay or enter payment details.'",
+          "suggestion": "Clarify whether the free plan requires payment details and present the free tier as a first-class option to avoid dark-pattern nudging toward paid plans.",
+          "run": "run_004",
+          "source": "llm",
+          "page": "/done.html"
+        }
+      ]
+    },
+    {
+      "title": "Dead End on /done.html",
+      "type": "dead_end",
+      "page": "/done.html",
+      "count": 2,
+      "runs_affected": [
+        "run_002",
+        "run_005"
+      ],
+      "examples": [
+        {
+          "step": 13,
+          "type": "dead_end",
+          "ui_element": "Plan selection cards / 'continue with the free plan for now' link",
+          "evidence": "'all three cards are paid plans ($8/$15/$49)... I spot the faint grey \"continue with the free plan for now\" link at the bottom... Slightly annoying that they've buried the free option in low-contrast text'",
+          "suggestion": "Surface the free plan as a clearly visible, equal-weight option (e.g., a proper button or card) instead of a low-contrast buried link, since the landing page promised a free account.",
+          "run": "run_002",
+          "source": "llm",
+          "page": "/done.html"
+        },
+        {
+          "step": 13,
+          "type": "dead_end",
+          "ui_element": "'continue with the free plan for now' link on plan.html",
+          "evidence": "\"There's a faint, low-contrast link at the bottom: 'continue with the free plan for now.' That grayed-out text is deliberately hard to notice \u2014 sloppy/manipulative UX.\"",
+          "suggestion": "Give the free-plan option equal visual weight (a clear, high-contrast button) so users can select it without hunting, avoiding dark-pattern design.",
+          "run": "run_005",
+          "source": "llm",
+          "page": "/done.html"
+        }
+      ]
+    },
+    {
+      "title": "Hidden Affordance on /permissions.html",
+      "type": "hidden_affordance",
+      "page": "/permissions.html",
+      "count": 2,
+      "runs_affected": [
+        "run_003",
+        "run_005"
+      ],
+      "examples": [
+        {
+          "step": 10,
+          "type": "hidden_affordance",
+          "ui_element": "Data Processing Agreement checkbox",
+          "evidence": "There's a \"Data Processing Agreement\" checkbox at the bottom, unchecked... I'll just try clicking the prominent \"Continue\" button first",
+          "suggestion": "Position the required consent checkbox above or adjacent to the Continue button so it isn't buried at the bottom below optional toggles.",
+          "run": "run_003",
+          "source": "llm",
+          "page": "/permissions.html"
+        },
+        {
+          "step": 9,
+          "type": "hidden_affordance",
+          "ui_element": "Continue button on permissions page",
+          "evidence": "\"Let me scroll down to find the continue button.\"",
+          "suggestion": "Keep the primary Continue action visible without scrolling, e.g. via a sticky footer button.",
+          "run": "run_005",
+          "source": "llm",
+          "page": "/permissions.html"
+        }
+      ]
+    },
+    {
+      "title": "Confusion on /permissions.html",
+      "type": "confusion",
+      "page": "/permissions.html",
+      "count": 2,
+      "runs_affected": [
+        "run_001"
+      ],
+      "examples": [
+        {
+          "step": 9,
+          "type": "confusion",
+          "ui_element": "Pre-checked consent checkboxes on 'Set up your workspace'",
+          "evidence": "'**Product updates** (checked): occasional marketing email. I don't really want this.' and deliberation=9s reading 'these carefully since I'm cautious about privacy'",
+          "suggestion": "Default marketing/optional data-sharing checkboxes to unchecked (opt-in) rather than pre-checked, to respect privacy expectations and reduce scrutiny burden.",
+          "run": "run_001",
+          "source": "llm",
+          "page": "/permissions.html"
+        },
+        {
+          "step": 11,
+          "type": "confusion",
+          "ui_element": "'Data Processing Agreement' checkbox vs optional items",
+          "evidence": "deliberation=15s: 'The Data Processing Agreement is different from the optional marketing/analytics items \u2014 it's a necessary agreement'",
+          "suggestion": "Visually separate mandatory legal agreements from optional preference toggles (e.g., a distinct section or required-field styling) so users don't have to spend time reasoning about which are necessary.",
+          "run": "run_001",
+          "source": "llm",
+          "page": "/permissions.html"
+        }
+      ]
+    },
+    {
+      "title": "Hesitation on /done.html",
+      "type": "hesitation",
+      "page": "/done.html",
+      "count": 1,
+      "runs_affected": [
+        "run_001"
+      ],
+      "examples": [
+        {
+          "step": 13,
+          "type": "hesitation",
+          "ui_element": "Paid plan cards (Basic/Pro/Team)",
+          "evidence": "'all three plans cost money ... The big colorful buttons all push paid plans, which makes me a little wary.'",
+          "suggestion": "Surface the free option alongside paid tiers as an explicit choice so users pursuing a free account aren't made wary that no free path exists.",
+          "run": "run_001",
+          "source": "llm",
+          "page": "/done.html"
+        }
+      ]
+    },
+    {
+      "title": "Error Recovery on /permissions.html",
+      "type": "error_recovery",
+      "page": "/permissions.html",
+      "count": 1,
+      "runs_affected": [
+        "run_003"
+      ],
+      "examples": [
+        {
+          "step": 10,
+          "type": "error_recovery",
+          "ui_element": "'Continue' button on workspace preferences page",
+          "evidence": "I got an error: \"Please review your selections.\" That must be the required Data Processing Agreement checkbox at the bottom.",
+          "suggestion": "Make the required DPA checkbox visible near the Continue button or scroll to and highlight the offending field on error, with a specific message like 'Please accept the Data Processing Agreement to continue.'",
+          "run": "run_003",
+          "source": "llm",
+          "page": "/permissions.html"
+        }
+      ]
+    },
+    {
+      "title": "Other on /permissions.html",
+      "type": "other",
+      "page": "/permissions.html",
+      "count": 1,
+      "runs_affected": [
+        "run_004"
+      ],
+      "examples": [
+        {
+          "step": 8,
+          "type": "other",
+          "ui_element": "'Create account' button on Create your account form",
+          "evidence": "At step 8 the page had already changed to page=/permissions.html before the user clicked 'Create account', and the user still says 'Now I'll click \"Create account\" to move to the next step.'",
+          "suggestion": "Ensure page transitions align with user actions so the account-creation submit and page navigation are clearly sequenced; avoid advancing the page before the submit click registers.",
+          "run": "run_004",
+          "source": "llm",
+          "page": "/permissions.html"
+        }
+      ]
+    }
+  ],
+  "usage_totals": {
+    "input_tokens": 152,
+    "output_tokens": 18370,
+    "cache_read_input_tokens": 939973,
+    "cache_creation_input_tokens": 131806
+  },
+  "runs": [
+    {
+      "run_id": "run_000",
+      "persona": "busy-professional",
+      "completed": false,
+      "gave_up": false,
+      "stop_reason": "agent_done",
+      "steps": 9,
+      "duration_s": 48.6,
+      "friction_events": 1
+    },
+    {
+      "run_id": "run_001",
+      "persona": "cautious-newcomer",
+      "completed": true,
+      "gave_up": false,
+      "stop_reason": "agent_done",
+      "steps": 13,
+      "duration_s": 80.9,
+      "friction_events": 5
+    },
+    {
+      "run_id": "run_002",
+      "persona": "efficient-power-user",
+      "completed": true,
+      "gave_up": false,
+      "stop_reason": "agent_done",
+      "steps": 13,
+      "duration_s": 61.6,
+      "friction_events": 6
+    },
+    {
+      "run_id": "run_003",
+      "persona": "busy-professional",
+      "completed": true,
+      "gave_up": false,
+      "stop_reason": "agent_done",
+      "steps": 15,
+      "duration_s": 93.5,
+      "friction_events": 4
+    },
+    {
+      "run_id": "run_004",
+      "persona": "cautious-newcomer",
+      "completed": true,
+      "gave_up": false,
+      "stop_reason": "agent_done",
+      "steps": 13,
+      "duration_s": 84.7,
+      "friction_events": 5
+    },
+    {
+      "run_id": "run_005",
+      "persona": "efficient-power-user",
+      "completed": true,
+      "gave_up": false,
+      "stop_reason": "agent_done",
+      "steps": 13,
+      "duration_s": 67.5,
+      "friction_events": 3
+    }
+  ]
+}
