@@ -26,6 +26,11 @@ registry: dict[str, dict] = {}
 
 KNOB_LIMITS = {"runs": (1, 50), "parallel": (1, 8), "max_steps": (1, 200)}
 
+# Pool for model="random". Every entry must accept the agent's API shape
+# (computer_20251124 tool + adaptive thinking + effort) — probed empirically;
+# claude-haiku-4-5 does NOT (no adaptive thinking).
+RANDOM_MODEL_POOL = ["claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6"]
+
 
 class LaunchError(Exception):
     def __init__(self, status: int, message: str):
@@ -132,7 +137,13 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
         if body.get("max_steps") is not None:
             spec.agent.max_steps = overrides["max_steps"] = _clamp("max_steps", body["max_steps"])
         if body.get("model"):
-            spec.agent.model = overrides["model"] = str(body["model"]).strip()
+            m = str(body["model"]).strip()
+            if m == "random":
+                spec.agent.model_pool = list(RANDOM_MODEL_POOL)
+                overrides["model"] = "random"
+            else:
+                spec.agent.model = overrides["model"] = m
+                spec.agent.model_pool = None
 
         if spec.agent.driver == "computer_use" and not os.environ.get("ANTHROPIC_API_KEY"):
             raise LaunchError(400, "ANTHROPIC_API_KEY is not set on the server; "
@@ -149,6 +160,7 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
                 "runs": spec.runs,
                 "parallel": spec.parallel,
                 "model": spec.agent.model,
+                "model_pool": spec.agent.model_pool,
                 "max_steps": spec.agent.max_steps,
                 "driver": spec.agent.driver,
             },

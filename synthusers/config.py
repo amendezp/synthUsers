@@ -43,7 +43,8 @@ class Persona:
 class AgentConfig:
     driver: str = "computer_use"        # "computer_use" | "scripted"
     model: str = DEFAULT_MODEL
-    judge_model: Optional[str] = None   # defaults to `model`
+    model_pool: Optional[list] = None   # each run draws a random model from here
+    judge_model: Optional[str] = None   # defaults to `model` (never the pool)
     effort: str = "high"
     max_steps: int = 40
     max_minutes: float = 12.0
@@ -88,6 +89,7 @@ def spec_to_dict(spec: Spec) -> dict:
         "agent": {
             "driver": spec.agent.driver,
             "model": spec.agent.model,
+            "model_pool": spec.agent.model_pool,
             "effort": spec.agent.effort,
             "max_steps": spec.agent.max_steps,
             "max_minutes": spec.agent.max_minutes,

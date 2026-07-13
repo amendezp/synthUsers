@@ -106,6 +106,8 @@ parallel: 3
 agent:
   driver: computer_use             # or "scripted" (offline, fixed action list)
   model: claude-opus-4-8
+  model_pool: [claude-opus-4-8, claude-sonnet-5]   # optional: each run draws
+                                   # a random model — capability as variance
   effort: high                     # low | medium | high | xhigh | max
   max_steps: 40
   max_minutes: 12
