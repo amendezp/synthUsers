@@ -7,11 +7,13 @@ import datetime
 import json
 import os
 import pathlib
+import re
 import threading
 import traceback
+import urllib.parse
 
 from ..batch import run_batch
-from ..config import load_spec
+from ..config import Persona, Spec, Success, Target, load_spec
 
 # Only one batch at a time: concurrent batches of the same spec would race on
 # the local_app port (hardcoded in the spec command) and interleave output.
@@ -61,6 +63,28 @@ def _preflight_chromium() -> None:
                            "(or point SYNTHUSERS_CHROMIUM at a Chrome binary)")
 
 
+def _custom_spec(body: dict) -> Spec:
+    """A spec built from a URL + task supplied in the request. Deliberately
+    never sets local_app (that would be arbitrary command execution) and has
+    no hard assertions — the LLM judge grades completion from the task text,
+    so the task should say what "done" looks like."""
+    url = str(body.get("url") or "").strip()
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise LaunchError(400, "target url must start with http:// or https://")
+    task = str(body.get("task") or "").strip()
+    if len(task) < 12:
+        raise LaunchError(400, "describe the task, including when the user is done "
+                               '(e.g. "… You are done when you reach the dashboard.")')
+    host = re.sub(r"[^a-z0-9]+", "-", parsed.netloc.lower()).strip("-")[:48] or "target"
+    spec = Spec(name=f"custom-{host}", target=Target(url=url), task=task,
+                success=Success(judge=True))
+    persona = str(body.get("persona") or "").strip()
+    if persona:
+        spec.personas = [Persona(name="custom-persona", prompt=persona)]
+    return spec
+
+
 def _unique_batch_dir(output_dir: str, name: str) -> pathlib.Path:
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     base = pathlib.Path(output_dir) / f"{name}_{stamp}"
@@ -76,20 +100,29 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
     LaunchError with an HTTP status."""
     global _current_id
 
-    spec_name = str(body.get("spec") or "")
-    spec_file = (specs_dir / pathlib.Path(spec_name).name).resolve()
-    if spec_file.parent != specs_dir.resolve() or not spec_file.is_file() \
-            or spec_file.suffix not in (".yaml", ".yml"):
-        raise LaunchError(400, f"unknown spec: {spec_name!r}")
+    custom = bool(body.get("url"))
+    if custom:
+        custom_spec = _custom_spec(body)   # validates before taking the lock
+        spec_label = "custom"
+    else:
+        spec_name = str(body.get("spec") or "")
+        spec_file = (specs_dir / pathlib.Path(spec_name).name).resolve()
+        if spec_file.parent != specs_dir.resolve() or not spec_file.is_file() \
+                or spec_file.suffix not in (".yaml", ".yml"):
+            raise LaunchError(400, f"unknown spec: {spec_name!r}")
+        spec_label = spec_file.name
 
     if not _lock.acquire(blocking=False):
         raise LaunchError(409, f"a batch is already running ({_current_id}); "
                                "try again when it finishes")
     try:
-        try:
-            spec = load_spec(spec_file)
-        except Exception as e:
-            raise LaunchError(400, f"spec failed to load: {e}")
+        if custom:
+            spec = custom_spec
+        else:
+            try:
+                spec = load_spec(spec_file)
+            except Exception as e:
+                raise LaunchError(400, f"spec failed to load: {e}")
 
         overrides = {}
         if body.get("runs") is not None:
@@ -109,7 +142,8 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
         batch_dir = _unique_batch_dir(spec.output_dir, spec.name)
         batch_dir.mkdir(parents=True, exist_ok=True)
         launch_info = {
-            "spec_file": spec_file.name,
+            "spec_file": spec_label,
+            "custom": ({"url": spec.target.url, "task": spec.task} if custom else None),
             "overrides": overrides,
             "effective": {
                 "runs": spec.runs,
@@ -123,7 +157,7 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
         (batch_dir / "launch.json").write_text(json.dumps(launch_info, indent=2))
 
         _current_id = batch_dir.name
-        registry[batch_dir.name] = {"state": "starting", "spec_file": spec_file.name,
+        registry[batch_dir.name] = {"state": "starting", "spec_file": spec_label,
                                     "started_at": launch_info["launched_at"], "error": None}
     except Exception:
         _lock.release()

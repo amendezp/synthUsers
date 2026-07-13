@@ -71,6 +71,37 @@ class Spec:
         return self.personas[index % len(self.personas)]
 
 
+def spec_to_dict(spec: Spec) -> dict:
+    """Round-trippable dict of a Spec, for freezing programmatically built
+    specs (no source YAML file) into a batch dir."""
+    d: dict[str, Any] = {
+        "name": spec.name,
+        "target": {"url": spec.target.url},
+        "task": spec.task,
+        "success": {
+            "url_matches": spec.success.url_matches,
+            "page_text": spec.success.page_text,
+            "judge": spec.success.judge,
+        },
+        "runs": spec.runs,
+        "parallel": spec.parallel,
+        "agent": {
+            "driver": spec.agent.driver,
+            "model": spec.agent.model,
+            "effort": spec.agent.effort,
+            "max_steps": spec.agent.max_steps,
+            "max_minutes": spec.agent.max_minutes,
+        },
+        "viewport": spec.viewport,
+        "output_dir": spec.output_dir,
+    }
+    if spec.target.local_app:
+        d["target"]["local_app"] = dataclasses.asdict(spec.target.local_app)
+    if spec.personas:
+        d["personas"] = [{"name": p.name, "prompt": p.prompt} for p in spec.personas]
+    return d
+
+
 def _pick(d: dict, cls) -> dict:
     fields = {f.name for f in dataclasses.fields(cls)}
     unknown = set(d) - fields

@@ -28,6 +28,27 @@ const token = {
   set: (v) => v ? localStorage.setItem("su_token", v) : localStorage.removeItem("su_token"),
 };
 
+/* models offered for computer-use runs; server accepts other IDs via the API */
+const MODEL_OPTIONS = [
+  ["claude-opus-4-8", "claude-opus-4-8 — most capable"],
+  ["claude-sonnet-5", "claude-sonnet-5 — ~half the cost"],
+  ["claude-haiku-4-5", "claude-haiku-4-5 — cheapest, less reliable"],
+];
+
+function modelSelect(initial, disabled = false) {
+  const select = el("select");
+  const ids = MODEL_OPTIONS.map(([id]) => id);
+  if (initial && !ids.includes(initial)) {
+    select.append(Object.assign(el("option", null, initial), { value: initial }));
+  }
+  for (const [id, label] of MODEL_OPTIONS) {
+    select.append(Object.assign(el("option", null, label), { value: id }));
+  }
+  if (initial) select.value = initial;
+  select.disabled = disabled;
+  return select;
+}
+
 /* same-tab image viewer: click a screenshot to enlarge, click/Escape to close */
 const lightbox = (() => {
   const overlay = el("div");
@@ -124,7 +145,7 @@ async function dashboard() {
     const runs = Object.assign(el("input"), { type: "number", min: 1, max: 50, value: selected.runs });
     const parallel = Object.assign(el("input"), { type: "number", min: 1, max: 8, value: selected.parallel });
     const maxSteps = Object.assign(el("input"), { type: "number", min: 1, max: 200, value: selected.max_steps });
-    const model = Object.assign(el("input"), { type: "text", value: selected.model, disabled: selected.driver !== "computer_use" });
+    const model = modelSelect(selected.model, selected.driver !== "computer_use");
     const launch = el("button", "primary", `Launch ${selected.name}`);
     launch.onclick = async () => {
       launch.disabled = true;
@@ -149,6 +170,55 @@ async function dashboard() {
     };
     panel.append(field("runs", runs), field("parallel", parallel),
                  field("max steps", maxSteps), field("model", model), launch);
+  }
+
+  // -- custom target -------------------------------------------------------
+  $app.append(el("h2", null, "Test any URL"));
+  if (!token.get()) {
+    $app.append(el("p", "notice", "Enter the admin token above to point the lab at any site."));
+  } else {
+    const cpanel = el("div", "launch-panel custom-panel");
+    const url = Object.assign(el("input"), {
+      type: "text", placeholder: "https://staging.yourapp.com/",
+    });
+    const task = el("textarea");
+    task.placeholder = 'What should the synthetic user do? Say what "done" looks like — ' +
+      'e.g. "Sign up for a free account. You are done when you reach the dashboard."';
+    const persona = el("textarea");
+    persona.placeholder = "Optional persona — e.g. \"You are a 61-year-old teacher who is " +
+      "not confident with technology. You read everything carefully…\"";
+    const runs = Object.assign(el("input"), { type: "number", min: 1, max: 50, value: 1 });
+    const parallel = Object.assign(el("input"), { type: "number", min: 1, max: 8, value: 1 });
+    const maxSteps = Object.assign(el("input"), { type: "number", min: 1, max: 200, value: 25 });
+    const model = modelSelect("claude-opus-4-8");
+    const launch = el("button", "primary", "Launch custom target");
+    launch.onclick = async () => {
+      launch.disabled = true;
+      try {
+        const resp = await fetch("/api/batches", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token.get()}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: url.value.trim(), task: task.value.trim(),
+            persona: persona.value.trim() || undefined,
+            runs: Number(runs.value), parallel: Number(parallel.value),
+            max_steps: Number(maxSteps.value), model: model.value,
+          }),
+        });
+        const body = await resp.json();
+        if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+        location.href = body.url;
+      } catch (e) {
+        showError(errBox, String(e.message || e));
+        launch.disabled = false;
+      }
+    };
+    const knobs = el("div", "knob-row");
+    knobs.append(field("runs", runs), field("parallel", parallel),
+                 field("max steps", maxSteps), field("model", model), launch);
+    cpanel.append(field("target url", url), field("task", task),
+                  field("persona (optional)", persona), knobs);
+    $app.append(cpanel);
   }
 
   // -- batches list --------------------------------------------------------
@@ -212,9 +282,10 @@ function batchView(batchId) {
 
   const header = el("div");
   const errBox = el("div");
-  const metricsBox = el("div");
+  const summaryBox = el("div");           // metric cards, above the runs
   const runGrid = el("div", "run-grid");
-  $app.append(header, errBox, metricsBox, runGrid);
+  const findingsBox = el("div");          // full findings, below the runs
+  $app.append(header, errBox, summaryBox, runGrid, findingsBox);
 
   const runCards = new Map();   // run_id -> card handle
   let batchInfo = { max_steps: 40, planned_runs: null };
@@ -226,6 +297,31 @@ function batchView(batchId) {
     const status = chip("pending");
     const persona = el("span", "persona");
     head.append(el("span", null, runId), persona, el("span", "spacer"), status);
+
+    // Who is this synthetic user? Personas rotate run-index % count (the
+    // harness's persona_for_run), so the assignment is known before the run
+    // reports anything.
+    const idx = Number(runId.replace(/\D/g, "")) || 0;
+    const personas = batchInfo.personas || [];
+    const assigned = personas.length ? personas[idx % personas.length] : null;
+    if (assigned) persona.textContent = assigned.name;
+
+    const meta = el("div", "run-meta");
+    const params = el("div", "run-params");
+    if (batchInfo.driver) params.append(el("span", "badge", batchInfo.driver));
+    if (batchInfo.model && batchInfo.driver !== "scripted") {
+      params.append(el("span", "badge", batchInfo.model));
+    }
+    if (batchInfo.effort) params.append(el("span", "badge", `effort ${batchInfo.effort}`));
+    params.append(el("span", "badge", `≤ ${batchInfo.max_steps} steps`));
+    meta.append(params);
+    if (assigned && assigned.prompt) {
+      const brief = assigned.prompt.replace(/\s+/g, " ").trim();
+      const desc = el("div", "run-desc",
+        brief.length > 150 ? brief.slice(0, 150).trimEnd() + "…" : brief);
+      desc.title = brief;   // full persona prompt on hover
+      meta.append(desc);
+    }
 
     const screen = el("div", "screen");
     const placeholder = el("div", "placeholder", "waiting for first screenshot…");
@@ -246,7 +342,14 @@ function batchView(batchId) {
       pinned = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 30;
     };
 
-    root.append(head, screen, statline, chat);
+    // screen + statline on the left, reasoning stream on the right
+    const main = el("div", "run-main");
+    main.append(screen, statline);
+    const chatWrap = el("div", "chat-wrap");
+    chatWrap.append(chat);
+    const cols = el("div", "run-cols");
+    cols.append(main, chatWrap);
+    root.append(head, meta, cols);
 
     // Insert in run-id order so reconnect snapshots land deterministically.
     const after = [...runCards.keys()].filter(k => k > runId).sort()[0];
@@ -338,7 +441,8 @@ function batchView(batchId) {
   }
 
   function renderMetrics(metrics, reportUrl) {
-    metricsBox.replaceChildren();
+    summaryBox.replaceChildren();
+    findingsBox.replaceChildren();
     const cards = el("div", "cards");
     const items = [
       ["success rate", metrics.success_rate == null ? "—" : `${Math.round(metrics.success_rate * 100)}%`,
@@ -354,11 +458,11 @@ function batchView(batchId) {
       c.append(el("div", "k", k), el("div", `v ${tone}`, String(v)));
       cards.append(c);
     }
-    metricsBox.append(cards);
+    summaryBox.append(cards);
 
     const failures = Object.entries(metrics.failure_points || {}).sort((a, b) => b[1] - a[1]);
     if (failures.length) {
-      metricsBox.append(el("h2", null, "Where users failed"));
+      findingsBox.append(el("h2", null, "Where users failed"));
       const table = el("table");
       const head = el("tr");
       for (const h of ["failure point", "users"]) head.append(el("th", null, h));
@@ -368,44 +472,81 @@ function batchView(batchId) {
         tr.append(el("td", null, point), el("td", null, String(n)));
         table.append(tr);
       }
-      metricsBox.append(table);
+      findingsBox.append(table);
     }
 
-    metricsBox.append(el("h2", null, "Friction findings"));
+    findingsBox.append(el("h2", null, "Friction findings"));
     const clusters = metrics.friction_clusters || [];
     if (!clusters.length) {
-      metricsBox.append(el("p", "notice", "No friction events detected."));
+      findingsBox.append(el("p", "notice", "No friction events detected."));
     }
-    for (const c of clusters) {
+    const TIERS = [
+      ["high", "Fix first", "blocking or hit by most users"],
+      ["medium", "Should fix", "meaningful drag on the flow"],
+      ["low", "Polish", "minor friction"],
+    ];
+    for (const [tier, label, hint] of TIERS) {
+      const items = clusters.filter(c => (c.priority || "low") === tier);
+      if (!items.length) continue;
+      const head = el("div", "tier-head");
+      head.append(el("span", `chip p-${tier}`, label),
+                  el("span", "caps-label", `${items.length} finding(s) — ${hint}`));
+      findingsBox.append(head);
+      for (const c of items) findingsBox.append(findingCard(c));
+    }
+
+    function findingCard(c) {
       const box = el("div", "cluster");
-      box.append(el("h3", null, c.title));
-      const badges = el("div");
-      badges.append(el("span", "badge", `${(c.runs_affected || []).length} run(s) affected`));
-      badges.append(el("span", "badge warn", `${c.count} event(s)`));
-      box.append(badges);
-      const list = el("ul", "evidence");
-      for (const ex of (c.examples || []).slice(0, 4)) {
-        const li = el("li", null, `${ex.run} step ${ex.step}: ${ex.detail || ex.evidence || ""}`);
-        if (ex.suggestion) {
-          li.append(" — ", el("i", null, ex.suggestion));
+      const cols = el("div", "cluster-cols");
+
+      const shot = el("div", "cluster-shot");
+      const thumbs = c.thumbs || [];
+      if (thumbs.length) {
+        const big = Object.assign(el("img", "big"),
+          { src: `/artifacts/${batchId}/${thumbs[0]}`, loading: "lazy" });
+        big.onclick = () => lightbox(big.src);
+        shot.append(big);
+        if (thumbs.length > 1) {
+          const mini = el("div", "thumbs");
+          for (const rel of thumbs.slice(1)) {
+            const img = Object.assign(el("img"), { src: `/artifacts/${batchId}/${rel}`, loading: "lazy" });
+            img.onclick = () => lightbox(img.src);
+            mini.append(img);
+          }
+          shot.append(mini);
         }
-        list.append(li);
       }
-      box.append(list);
-      if ((c.thumbs || []).length) {
-        const thumbs = el("div", "thumbs");
-        for (const rel of c.thumbs) {
-          const img = Object.assign(el("img"), { src: `/artifacts/${batchId}/${rel}`, loading: "lazy" });
-          img.onclick = () => lightbox(img.src);
-          thumbs.append(img);
+
+      const body = el("div", "cluster-body");
+      body.append(el("h3", null, c.title));
+      body.append(el("div", "caps-label",
+        `${(c.runs_affected || []).length} of ${metrics.n_runs} user(s) · ${c.count} event(s)`));
+      if (c.recommendation) {
+        const fix = el("div", "fix");
+        fix.append(el("span", "fix-k", "Fix"), el("span", null, c.recommendation));
+        body.append(fix);
+      }
+      const examples = (c.examples || []).slice(0, 4);
+      if (examples.length) {
+        const details = el("details");
+        details.append(el("summary", null, `Evidence — ${examples.length} quote(s)`));
+        const list = el("ul", "evidence");
+        for (const ex of examples) {
+          const li = el("li", null, `${ex.run} step ${ex.step}: ${ex.detail || ex.evidence || ""}`);
+          if (ex.suggestion) li.append(" — ", el("i", null, ex.suggestion));
+          list.append(li);
         }
-        box.append(thumbs);
+        details.append(list);
+        body.append(details);
       }
-      metricsBox.append(box);
+
+      cols.append(shot, body);
+      box.append(cols);
+      return box;
     }
 
     if (reportUrl) {
-      metricsBox.append(Object.assign(el("a", "btn", "Download portable report →"),
+      findingsBox.append(Object.assign(el("a", "btn", "Download portable report →"),
                                       { href: reportUrl, target: "_blank" }));
     }
   }
