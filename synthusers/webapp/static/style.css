@@ -220,6 +220,21 @@ tr:hover td { background: rgba(255, 255, 255, 0.03); }
 td a { color: var(--text-primary); text-decoration: none; font-weight: 500; }
 td a:hover { text-decoration: underline; }
 
+/* batch view: friction findings (merged from the report) */
+.cluster {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border); border-radius: 16px;
+  padding: 16px 18px; margin-bottom: 12px;
+}
+.cluster h3 { font-size: 19px; margin: 0 0 8px; }
+.evidence { color: var(--text-secondary); font-size: 13.5px; margin: 10px 0 0; padding-left: 18px; }
+.evidence li { margin-bottom: 4px; }
+.evidence i { color: var(--text-tertiary); }
+.thumbs { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.thumbs img { height: 110px; border: 1px solid var(--glass-border); border-radius: 8px;
+              background: #fff; cursor: zoom-in; }
+
 /* batch view: run cards */
 .run-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 18px; }
 .run {

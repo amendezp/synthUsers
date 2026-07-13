@@ -15,4 +15,5 @@ RUN pip install --no-cache-dir -e . \
     && mkdir -p runs
 
 EXPOSE 8700
-CMD ["python3", "-m", "synthusers", "serve", "--host", "0.0.0.0", "--port", "8700"]
+# Railway/Render/Heroku-style platforms inject PORT; default to 8700 elsewhere.
+CMD ["sh", "-c", "python3 -m synthusers serve --host 0.0.0.0 --port ${PORT:-8700}"]

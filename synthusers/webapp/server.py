@@ -281,9 +281,8 @@ class Handler(BaseHTTPRequestHandler):
                         self._sse_send("run_finished", payload)
 
             if (batch_dir / "metrics.json").exists():
-                metrics = json.loads((batch_dir / "metrics.json").read_text())
                 self._sse_send("batch_finished", {
-                    "metrics": metrics,
+                    "metrics": state.load_metrics(batch_dir),
                     "report_url": f"/artifacts/{batch_id}/report.html",
                 })
                 return

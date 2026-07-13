@@ -59,6 +59,28 @@ def _read_json(path: pathlib.Path) -> dict:
         return {}
 
 
+def load_metrics(batch_dir: pathlib.Path) -> dict | None:
+    """metrics.json plus resolved screenshot paths for each friction-cluster
+    example, so the batch page can render findings without a second pass."""
+    metrics = _read_json(batch_dir / "metrics.json")
+    if not metrics:
+        return None
+    for cluster in metrics.get("friction_clusters", []):
+        thumbs = []
+        for ex in cluster.get("examples", [])[:3]:
+            run, step = ex.get("run"), ex.get("step")
+            if run is None or step is None:
+                continue
+            for name in (f"{step:03d}_annotated.png", f"{step:03d}_after.png",
+                         f"{step:03d}_initial.png"):
+                rel = f"{run}/shots/{name}"
+                if (batch_dir / rel).exists():
+                    thumbs.append(rel)
+                    break
+        cluster["thumbs"] = thumbs
+    return metrics
+
+
 def _launch_info(batch_dir: pathlib.Path) -> dict:
     return _read_json(batch_dir / "launch.json")
 
@@ -223,7 +245,7 @@ def build_snapshot(batch_dir: pathlib.Path, registry: dict[str, dict]) -> dict:
     """Full batch state for `GET /api/batches/{id}` and the SSE `snapshot`."""
     frozen = _frozen_spec(batch_dir)
     launch = _launch_info(batch_dir)
-    metrics = _read_json(batch_dir / "metrics.json") or None
+    metrics = load_metrics(batch_dir)
     reg = registry.get(batch_dir.name) or {}
 
     runs = []

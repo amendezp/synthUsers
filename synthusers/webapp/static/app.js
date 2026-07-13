@@ -355,8 +355,58 @@ function batchView(batchId) {
       cards.append(c);
     }
     metricsBox.append(cards);
+
+    const failures = Object.entries(metrics.failure_points || {}).sort((a, b) => b[1] - a[1]);
+    if (failures.length) {
+      metricsBox.append(el("h2", null, "Where users failed"));
+      const table = el("table");
+      const head = el("tr");
+      for (const h of ["failure point", "users"]) head.append(el("th", null, h));
+      table.append(head);
+      for (const [point, n] of failures) {
+        const tr = el("tr");
+        tr.append(el("td", null, point), el("td", null, String(n)));
+        table.append(tr);
+      }
+      metricsBox.append(table);
+    }
+
+    metricsBox.append(el("h2", null, "Friction findings"));
+    const clusters = metrics.friction_clusters || [];
+    if (!clusters.length) {
+      metricsBox.append(el("p", "notice", "No friction events detected."));
+    }
+    for (const c of clusters) {
+      const box = el("div", "cluster");
+      box.append(el("h3", null, c.title));
+      const badges = el("div");
+      badges.append(el("span", "badge", `${(c.runs_affected || []).length} run(s) affected`));
+      badges.append(el("span", "badge warn", `${c.count} event(s)`));
+      box.append(badges);
+      const list = el("ul", "evidence");
+      for (const ex of (c.examples || []).slice(0, 4)) {
+        const li = el("li", null, `${ex.run} step ${ex.step}: ${ex.detail || ex.evidence || ""}`);
+        if (ex.suggestion) {
+          li.append(" — ", el("i", null, ex.suggestion));
+        }
+        list.append(li);
+      }
+      box.append(list);
+      if ((c.thumbs || []).length) {
+        const thumbs = el("div", "thumbs");
+        for (const rel of c.thumbs) {
+          const img = Object.assign(el("img"), { src: `/artifacts/${batchId}/${rel}`, loading: "lazy" });
+          img.onclick = () => lightbox(img.src);
+          thumbs.append(img);
+        }
+        box.append(thumbs);
+      }
+      metricsBox.append(box);
+    }
+
     if (reportUrl) {
-      metricsBox.append(Object.assign(el("a", "btn", "Open full report →"), { href: reportUrl, target: "_blank" }));
+      metricsBox.append(Object.assign(el("a", "btn", "Download portable report →"),
+                                      { href: reportUrl, target: "_blank" }));
     }
   }
 
