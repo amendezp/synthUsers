@@ -59,13 +59,33 @@ def _read_json(path: pathlib.Path) -> dict:
         return {}
 
 
+# Friction types that stop or derail a user outright, vs. slow them down.
+BLOCKER_TYPES = {"dead_end", "error_recovery", "rage_click", "backtrack"}
+PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
+def _cluster_priority(cluster: dict, n_runs: int) -> str:
+    """Tier by severity of the friction type and how many users hit it."""
+    affected = len(cluster.get("runs_affected", []))
+    reach = affected / n_runs if n_runs else 0.0
+    blocker = cluster.get("type") in BLOCKER_TYPES
+    if (blocker and affected >= 2) or reach >= 0.66:
+        return "high"
+    if blocker or reach >= 0.33:
+        return "medium"
+    return "low"
+
+
 def load_metrics(batch_dir: pathlib.Path) -> dict | None:
-    """metrics.json plus resolved screenshot paths for each friction-cluster
-    example, so the batch page can render findings without a second pass."""
+    """metrics.json plus, per friction cluster: resolved screenshot paths, a
+    priority tier, and a headline recommendation — so the batch page renders
+    skimmable findings without a second pass."""
     metrics = _read_json(batch_dir / "metrics.json")
     if not metrics:
         return None
-    for cluster in metrics.get("friction_clusters", []):
+    n_runs = int(metrics.get("n_runs") or 0)
+    clusters = metrics.get("friction_clusters", [])
+    for cluster in clusters:
         thumbs = []
         for ex in cluster.get("examples", [])[:3]:
             run, step = ex.get("run"), ex.get("step")
@@ -78,6 +98,13 @@ def load_metrics(batch_dir: pathlib.Path) -> dict | None:
                     thumbs.append(rel)
                     break
         cluster["thumbs"] = thumbs
+        cluster["priority"] = _cluster_priority(cluster, n_runs)
+        cluster["recommendation"] = next(
+            (ex["suggestion"] for ex in cluster.get("examples", [])
+             if ex.get("suggestion")), None)
+    clusters.sort(key=lambda c: (PRIORITY_ORDER[c["priority"]],
+                                 -len(c.get("runs_affected", [])),
+                                 -(c.get("count") or 0)))
     return metrics
 
 

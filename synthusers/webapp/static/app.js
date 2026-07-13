@@ -480,32 +480,69 @@ function batchView(batchId) {
     if (!clusters.length) {
       findingsBox.append(el("p", "notice", "No friction events detected."));
     }
-    for (const c of clusters) {
+    const TIERS = [
+      ["high", "Fix first", "blocking or hit by most users"],
+      ["medium", "Should fix", "meaningful drag on the flow"],
+      ["low", "Polish", "minor friction"],
+    ];
+    for (const [tier, label, hint] of TIERS) {
+      const items = clusters.filter(c => (c.priority || "low") === tier);
+      if (!items.length) continue;
+      const head = el("div", "tier-head");
+      head.append(el("span", `chip p-${tier}`, label),
+                  el("span", "caps-label", `${items.length} finding(s) — ${hint}`));
+      findingsBox.append(head);
+      for (const c of items) findingsBox.append(findingCard(c));
+    }
+
+    function findingCard(c) {
       const box = el("div", "cluster");
-      box.append(el("h3", null, c.title));
-      const badges = el("div");
-      badges.append(el("span", "badge", `${(c.runs_affected || []).length} run(s) affected`));
-      badges.append(el("span", "badge warn", `${c.count} event(s)`));
-      box.append(badges);
-      const list = el("ul", "evidence");
-      for (const ex of (c.examples || []).slice(0, 4)) {
-        const li = el("li", null, `${ex.run} step ${ex.step}: ${ex.detail || ex.evidence || ""}`);
-        if (ex.suggestion) {
-          li.append(" — ", el("i", null, ex.suggestion));
+      const cols = el("div", "cluster-cols");
+
+      const shot = el("div", "cluster-shot");
+      const thumbs = c.thumbs || [];
+      if (thumbs.length) {
+        const big = Object.assign(el("img", "big"),
+          { src: `/artifacts/${batchId}/${thumbs[0]}`, loading: "lazy" });
+        big.onclick = () => lightbox(big.src);
+        shot.append(big);
+        if (thumbs.length > 1) {
+          const mini = el("div", "thumbs");
+          for (const rel of thumbs.slice(1)) {
+            const img = Object.assign(el("img"), { src: `/artifacts/${batchId}/${rel}`, loading: "lazy" });
+            img.onclick = () => lightbox(img.src);
+            mini.append(img);
+          }
+          shot.append(mini);
         }
-        list.append(li);
       }
-      box.append(list);
-      if ((c.thumbs || []).length) {
-        const thumbs = el("div", "thumbs");
-        for (const rel of c.thumbs) {
-          const img = Object.assign(el("img"), { src: `/artifacts/${batchId}/${rel}`, loading: "lazy" });
-          img.onclick = () => lightbox(img.src);
-          thumbs.append(img);
+
+      const body = el("div", "cluster-body");
+      body.append(el("h3", null, c.title));
+      body.append(el("div", "caps-label",
+        `${(c.runs_affected || []).length} of ${metrics.n_runs} user(s) · ${c.count} event(s)`));
+      if (c.recommendation) {
+        const fix = el("div", "fix");
+        fix.append(el("span", "fix-k", "Fix"), el("span", null, c.recommendation));
+        body.append(fix);
+      }
+      const examples = (c.examples || []).slice(0, 4);
+      if (examples.length) {
+        const details = el("details");
+        details.append(el("summary", null, `Evidence — ${examples.length} quote(s)`));
+        const list = el("ul", "evidence");
+        for (const ex of examples) {
+          const li = el("li", null, `${ex.run} step ${ex.step}: ${ex.detail || ex.evidence || ""}`);
+          if (ex.suggestion) li.append(" — ", el("i", null, ex.suggestion));
+          list.append(li);
         }
-        box.append(thumbs);
+        details.append(list);
+        body.append(details);
       }
-      findingsBox.append(box);
+
+      cols.append(shot, body);
+      box.append(cols);
+      return box;
     }
 
     if (reportUrl) {
