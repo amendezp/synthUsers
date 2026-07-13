@@ -28,6 +28,20 @@ const token = {
   set: (v) => v ? localStorage.setItem("su_token", v) : localStorage.removeItem("su_token"),
 };
 
+/* same-tab image viewer: click a screenshot to enlarge, click/Escape to close */
+const lightbox = (() => {
+  const overlay = el("div");
+  overlay.id = "su-lb";
+  const img = el("img");
+  overlay.append(img);
+  overlay.onclick = () => overlay.classList.remove("open");
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") overlay.classList.remove("open");
+  });
+  document.body.append(overlay);
+  return (src) => { img.src = src; overlay.classList.add("open"); };
+})();
+
 async function getJSON(url) {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`${url}: HTTP ${resp.status}`);
@@ -217,6 +231,7 @@ function batchView(batchId) {
     const placeholder = el("div", "placeholder", "waiting for first screenshot…");
     const img = el("img");
     img.style.display = "none";
+    img.onclick = () => lightbox(img.src);
     screen.append(placeholder, img);
 
     const statline = el("div", "statline");

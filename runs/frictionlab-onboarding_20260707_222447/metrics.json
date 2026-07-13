@@ -1,6 +1,6 @@
 {
   "spec": "frictionlab-onboarding",
-  "generated_at": "2026-07-07T22:29:45.046090+00:00",
+  "generated_at": "2026-07-13T18:33:26.825250+00:00",
   "target_url": "http://127.0.0.1:8734/",
   "task": "You want to try NimbusNotes, a note-taking app a colleague recommended.\nSign up for a FREE account \u2014 you are not willing to pay or enter any payment\ndetails. You are done when you reach the welcome screen confirming your\nworkspace is ready. Use any plausible made-up name, email and password.",
   "n_runs": 6,
