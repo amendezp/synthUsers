@@ -53,7 +53,7 @@ async function dashboard() {
   tokenSave.onclick = () => { token.set(tokenInput.value.trim()); dashboard(); };
   tokenBar.append(tokenInput, tokenSave);
   top.append(tokenBar);
-  $app.append(top, el("div", "sub", "Deploy synthetic users against an interface and watch them work."));
+  $app.append(top, el("div", "caps-label brand-sub", "User Simulation Environment"));
 
   const errBox = el("div");
   $app.append(errBox);
@@ -168,9 +168,13 @@ async function dashboard() {
   }, 5000);
 }
 
-function showError(box, message) {
+function showError(box, message, persist) {
   box.replaceChildren(el("div", "err-banner", message));
-  setTimeout(() => box.replaceChildren(), 8000);
+  if (!persist) setTimeout(() => box.replaceChildren(), 8000);
+}
+
+function fmtTime(epoch) {
+  return new Date(epoch * 1000).toLocaleTimeString([], { hour12: false });
 }
 
 /* ---------------- batch view ---------------- */
@@ -265,15 +269,16 @@ function batchView(batchId) {
     card.lat.textContent = `${(step.model_latency_s || 0).toFixed(1)}s think · ${(step.exec_latency_s || 0).toFixed(1)}s act`;
     card.url.textContent = step.url || "";
 
-    if (step.reasoning) {
-      card.chat.append(el("div", "msg", step.reasoning));
-    }
+    const entry = (cls, text) => {
+      const row = el("div", `log-entry ${cls}`);
+      row.append(el("div", "log-time", fmtTime(step.ts)), el("div", null, text));
+      card.chat.append(row);
+    };
+    if (step.reasoning) entry("alert", step.reasoning);
     if (step.action_label && step.action.action !== "initial_state") {
-      card.chat.append(el("div", "act", `#${step.step} ${step.action_label}`));
+      entry("act", `#${step.step} ${step.action_label}`);
     }
-    if (step.error) {
-      card.chat.append(el("div", "act errline", `error: ${step.error}`));
-    }
+    if (step.error) entry("errline", `error: ${step.error}`);
     card.scrollChat();
   }
 
@@ -298,23 +303,23 @@ function batchView(batchId) {
     }
     card.chat.append(el("div", "sys",
       `${meta.stop_reason} · ${meta.steps} steps · ${meta.duration_s}s · ${meta.friction_count} friction event(s)`));
-    if (meta.final_text) card.chat.append(el("div", "msg", meta.final_text));
+    if (meta.final_text) card.chat.append(el("div", "log-entry alert final", meta.final_text));
     card.scrollChat();
   }
 
   function renderHeader(batch) {
     batchInfo = batch;
     header.replaceChildren();
-    const bar = el("div", "topbar");
+    const bar = el("div", "topbar batch-title");
     const title = el("h2", null, batch.spec_name);
-    title.style.margin = "18px 0 0";
     bar.append(title, chip(batch.status));
+    if (batch.status === "running") bar.append(el("span", "status-dot"));
     header.append(bar);
     header.append(el("div", "sub",
       `${batch.id} · started ${fmtWhen(batch.created_at)}` +
       (batch.target_url ? ` · target ${batch.target_url}` : "")));
     if (batch.task) header.append(el("div", "task", batch.task));
-    if (batch.error) showError(errBox, batch.error);
+    if (batch.error) showError(errBox, batch.error, true);
   }
 
   function renderMetrics(metrics, reportUrl) {
@@ -373,8 +378,7 @@ function batchView(batchId) {
     es.close();
   });
   es.addEventListener("batch_error", (e) => {
-    showError(errBox, JSON.parse(e.data).message);
-    renderHeader({ ...batchInfo, status: "error" });
+    renderHeader({ ...batchInfo, status: "error", error: JSON.parse(e.data).message });
     es.close();
   });
   es.onerror = async () => {

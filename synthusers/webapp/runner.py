@@ -8,6 +8,7 @@ import json
 import os
 import pathlib
 import threading
+import traceback
 
 from ..batch import run_batch
 from ..config import load_spec
@@ -40,6 +41,24 @@ def _clamp(name: str, value) -> int:
     if not lo <= value <= hi:
         raise LaunchError(400, f"{name} must be between {lo} and {hi}")
     return value
+
+
+def _preflight_chromium() -> None:
+    """Fail the launch with an actionable message when no browser exists —
+    otherwise the batch dies mid-run with an opaque Playwright error."""
+    fallback = os.environ.get("SYNTHUSERS_CHROMIUM", "/opt/pw-browsers/chromium")
+    if pathlib.Path(fallback).exists():
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as pw:
+            if pathlib.Path(pw.chromium.executable_path).exists():
+                return
+    except Exception:
+        pass
+    raise LaunchError(400, "No Chromium found for Playwright — run "
+                           "`playwright install chromium` on the server "
+                           "(or point SYNTHUSERS_CHROMIUM at a Chrome binary)")
 
 
 def _unique_batch_dir(output_dir: str, name: str) -> pathlib.Path:
@@ -85,6 +104,7 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
         if spec.agent.driver == "computer_use" and not os.environ.get("ANTHROPIC_API_KEY"):
             raise LaunchError(400, "ANTHROPIC_API_KEY is not set on the server; "
                                    "set it or pick a scripted-driver spec")
+        _preflight_chromium()
 
         batch_dir = _unique_batch_dir(spec.output_dir, spec.name)
         batch_dir.mkdir(parents=True, exist_ok=True)
@@ -117,6 +137,7 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
             run_batch(spec, headed=False, batch_dir=batch_dir)
             entry["state"] = "done"
         except Exception as e:
+            traceback.print_exc()
             entry["state"] = "error"
             entry["error"] = f"{type(e).__name__}: {e}"
             launch_info["error"] = entry["error"]
