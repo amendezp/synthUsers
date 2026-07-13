@@ -1,6 +1,6 @@
 {
   "spec": "frictionlab-smoke",
-  "generated_at": "2026-07-13T18:33:27.110481+00:00",
+  "generated_at": "2026-07-13T21:09:50.468698+00:00",
   "target_url": "http://127.0.0.1:8741/",
   "task": "Sign up for a FREE NimbusNotes account and reach the welcome screen.",
   "n_runs": 1,

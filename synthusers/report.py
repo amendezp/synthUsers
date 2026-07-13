@@ -30,10 +30,10 @@ CSS = """
 body { font-family:var(--font-ui); font-size:14.5px; line-height:1.55; color:var(--text-primary);
   background-color:var(--bg-base);
   background-image:
-    linear-gradient(rgba(24,34,44,0.28), rgba(24,34,44,0.28)),
-    radial-gradient(circle at 15% 20%, rgba(230,223,207,0.55) 0%, transparent 40%),
-    radial-gradient(circle at 85% 80%, var(--bloom-blue) 0%, transparent 50%),
-    radial-gradient(circle at 50% 60%, var(--bloom-dark) 0%, transparent 60%);
+    linear-gradient(rgba(24,34,44,0.3), rgba(24,34,44,0.3)),
+    radial-gradient(circle at 92% 8%, rgba(230,223,207,0.38) 0%, transparent 35%),
+    radial-gradient(circle at 80% 85%, var(--bloom-blue) 0%, transparent 50%),
+    radial-gradient(circle at 35% 55%, var(--bloom-dark) 0%, transparent 60%);
   background-attachment:fixed; min-height:100vh; }
 body::before { content:""; position:fixed; inset:0; opacity:0.15; pointer-events:none;
   z-index:0; mix-blend-mode:overlay;
