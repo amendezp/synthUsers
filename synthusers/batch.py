@@ -13,12 +13,13 @@ import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
+import yaml
 from playwright.sync_api import sync_playwright
 
 from . import friction, verdict
 from .agent import make_agent
 from .browser import finalize_video, launch_browser, new_session
-from .config import Spec
+from .config import Spec, spec_to_dict
 from .executor import ComputerExecutor
 from .trace import TraceRecorder, read_meta, read_trace
 
@@ -201,7 +202,9 @@ def run_batch(spec: Spec, headed: bool = False, runs_override: int | None = None
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         batch_dir = pathlib.Path(spec.output_dir) / f"{spec.name}_{stamp}"
     batch_dir.mkdir(parents=True, exist_ok=True)
-    (batch_dir / "spec.yaml").write_text(spec.path.read_text() if spec.path else "")
+    (batch_dir / "spec.yaml").write_text(
+        spec.path.read_text() if spec.path
+        else yaml.safe_dump(spec_to_dict(spec), sort_keys=False))
 
     print(f"Batch {batch_dir.name}: {n_runs} run(s), driver={spec.agent.driver}, "
           f"target={spec.target.url}")
