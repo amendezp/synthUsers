@@ -32,6 +32,41 @@ open runs/<batch_dir>/report.html
 Point it at any URL by writing a spec (see below). To just browse the demo app:
 `python3 -m synthusers serve-lab` → http://127.0.0.1:8734/
 
+## Live dashboard
+
+```bash
+python3 -m synthusers serve            # → http://127.0.0.1:8700/
+```
+
+A web UI over the harness: pick a spec, tweak knobs (runs, parallel, model,
+max steps), and launch from the browser. Each run streams live — the latest
+per-step screenshot beside a chat log of the agent's narrated reasoning — and
+the polished video player swaps in the moment a run finishes. Batch metrics
+and the full report appear when the batch completes.
+
+- **Share URLs**: `/batch/<id>` is read-only — send it to anyone who should
+  watch (or replay) a batch. No token needed to view.
+- **Auth**: starting a batch requires the admin token, printed at startup
+  (pin it with `SYNTHUSERS_ADMIN_TOKEN`). Enter it in the dashboard header.
+- **CLI parity**: batches started with `synthusers run` show up in the
+  dashboard too — all state derives from the `runs/` directory.
+- One batch runs at a time (the demo app's port is fixed per spec); the API
+  returns 409 while one is in flight.
+
+### Deploy (Railway / Fly / Render / any Docker host)
+
+```bash
+docker build -t synthusers .
+docker run -p 8700:8700 -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e SYNTHUSERS_ADMIN_TOKEN=choose-a-token -v synthusers-runs:/app/runs synthusers
+```
+
+On Railway: create a service from this repo (it detects the Dockerfile), set
+`ANTHROPIC_API_KEY` and `SYNTHUSERS_ADMIN_TOKEN` variables, and attach a
+volume at `/app/runs` so batches survive redeploys. The runner needs a
+long-lived container — serverless platforms (e.g. Vercel) can't host the
+agents' browser sessions.
+
 ## What you get per batch
 
 ```
