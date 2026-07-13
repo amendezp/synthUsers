@@ -3,9 +3,11 @@ generate the report."""
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import json
 import pathlib
+import random
 import shlex
 import statistics
 import subprocess
@@ -63,6 +65,12 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
     persona = spec.persona_for_run(run_index)
     trace = TraceRecorder(run_dir)
 
+    # Each run may draw a random model from the pool — model diversity as a
+    # user-capability proxy. The judge/labeler stay on the base model.
+    agent_cfg = spec.agent
+    if spec.agent.model_pool and spec.agent.driver == "computer_use":
+        agent_cfg = dataclasses.replace(spec.agent, model=random.choice(spec.agent.model_pool))
+
     final_url, final_text_page = "", ""
     with sync_playwright() as pw:
         browser = launch_browser(pw, headed=headed)
@@ -70,7 +78,7 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
         try:
             page.goto(spec.target.url, wait_until="domcontentloaded")
             executor = ComputerExecutor(page, spec.viewport)
-            agent = make_agent(spec.agent, persona, spec.viewport)
+            agent = make_agent(agent_cfg, persona, spec.viewport)
             result = agent.run(executor, trace, spec.task)
             final_url = page.url
             try:
@@ -93,7 +101,7 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
         "persona": persona.name if persona else None,
         "viewport": spec.viewport,
         "driver": spec.agent.driver,
-        "model": spec.agent.model if spec.agent.driver == "computer_use" else None,
+        "model": agent_cfg.model if spec.agent.driver == "computer_use" else None,
         "stop_reason": result.stop_reason,
         "final_text": result.final_text,
         "final_url": final_url,
@@ -176,6 +184,7 @@ def aggregate(spec: Spec, batch_dir: pathlib.Path, metas: list[dict]) -> dict:
             {
                 "run_id": m["run_id"],
                 "persona": m["persona"],
+                "model": m.get("model"),
                 "completed": m["verdict"]["completed"],
                 "gave_up": m["verdict"].get("gave_up"),
                 "stop_reason": m["stop_reason"],

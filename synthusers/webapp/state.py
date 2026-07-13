@@ -257,6 +257,7 @@ def run_finished_payload(run_dir: pathlib.Path) -> dict | None:
             "steps": meta.get("steps"),
             "duration_s": meta.get("duration_s"),
             "persona": meta.get("persona"),
+            "model": meta.get("model"),
             "video": meta.get("video"),
             "final_text": meta.get("final_text"),
             "verdict": {
@@ -300,6 +301,7 @@ def build_snapshot(batch_dir: pathlib.Path, registry: dict[str, dict]) -> dict:
             "planned_runs": planned_runs(batch_dir),
             "max_steps": effective.get("max_steps") or agent_cfg.get("max_steps", 40),
             "model": effective.get("model") or agent_cfg.get("model"),
+            "model_pool": effective.get("model_pool") or agent_cfg.get("model_pool"),
             "effort": agent_cfg.get("effort", "high"),
             "driver": effective.get("driver") or agent_cfg.get("driver", "computer_use"),
             "personas": frozen.get("personas") or [],

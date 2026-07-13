@@ -28,11 +28,13 @@ const token = {
   set: (v) => v ? localStorage.setItem("su_token", v) : localStorage.removeItem("su_token"),
 };
 
-/* models offered for computer-use runs; server accepts other IDs via the API */
+/* models offered for computer-use runs; server accepts other IDs via the API.
+   (claude-haiku-4-5 is out: it rejects the agent's adaptive-thinking calls.) */
 const MODEL_OPTIONS = [
   ["claude-opus-4-8", "claude-opus-4-8 — most capable"],
   ["claude-sonnet-5", "claude-sonnet-5 — ~half the cost"],
-  ["claude-haiku-4-5", "claude-haiku-4-5 — cheapest, less reliable"],
+  ["claude-sonnet-4-6", "claude-sonnet-4-6 — previous gen"],
+  ["random", "🎲 random per run — drives variance"],
 ];
 
 function modelSelect(initial, disabled = false) {
@@ -309,8 +311,11 @@ function batchView(batchId) {
     const meta = el("div", "run-meta");
     const params = el("div", "run-params");
     if (batchInfo.driver) params.append(el("span", "badge", batchInfo.driver));
-    if (batchInfo.model && batchInfo.driver !== "scripted") {
-      params.append(el("span", "badge", batchInfo.model));
+    let modelBadge = null;
+    if (batchInfo.driver !== "scripted" && (batchInfo.model || batchInfo.model_pool)) {
+      modelBadge = el("span", "badge",
+        batchInfo.model_pool ? "🎲 random model" : batchInfo.model);
+      params.append(modelBadge);
     }
     if (batchInfo.effort) params.append(el("span", "badge", `effort ${batchInfo.effort}`));
     params.append(el("span", "badge", `≤ ${batchInfo.max_steps} steps`));
@@ -356,7 +361,7 @@ function batchView(batchId) {
     runGrid.insertBefore(root, after ? runCards.get(after).root : null);
 
     const handle = {
-      root, img, placeholder, screen, chat, status, persona,
+      root, img, placeholder, screen, chat, status, persona, modelBadge,
       stepCounter, lat, url, maxStep: -1, finished: false, statusName: "pending",
       setStatus(name) {
         if (this.statusName === name) return;
@@ -411,6 +416,7 @@ function batchView(batchId) {
       : verdict.completed === false ? "failed" : "done";
     card.setStatus(status);
     if (meta.persona) card.persona.textContent = meta.persona;
+    if (meta.model && card.modelBadge) card.modelBadge.textContent = meta.model;
 
     if (meta.video) {
       const video = Object.assign(el("video"), {
