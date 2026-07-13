@@ -2,6 +2,7 @@
 
   synthusers run specs/frictionlab.yaml [--runs N] [--headed]
   synthusers report runs/<batch_dir>
+  synthusers serve [--port 8700] [--host 127.0.0.1]
   synthusers serve-lab [--port 8734]
 """
 
@@ -28,6 +29,11 @@ def main(argv: list[str] | None = None) -> int:
     p_lab = sub.add_parser("serve-lab", help="serve the friction-lab demo app")
     p_lab.add_argument("--port", type=int, default=8734)
 
+    p_srv = sub.add_parser("serve", help="serve the live dashboard (kickoff + watch batches)")
+    p_srv.add_argument("--port", type=int, default=8700)
+    p_srv.add_argument("--host", default="127.0.0.1")
+    p_srv.add_argument("--root", default=None, help="repo root (defaults to cwd)")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "run":
@@ -41,6 +47,11 @@ def main(argv: list[str] | None = None) -> int:
         from .batch import regenerate
         path = regenerate(pathlib.Path(args.batch_dir))
         print(f"Report: {path}")
+        return 0
+
+    if args.cmd == "serve":
+        from .webapp.server import serve
+        serve(host=args.host, port=args.port, root=args.root)
         return 0
 
     if args.cmd == "serve-lab":

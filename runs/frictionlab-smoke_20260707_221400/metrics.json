@@ -1,0 +1,190 @@
+{
+  "spec": "frictionlab-smoke",
+  "generated_at": "2026-07-13T21:09:50.468698+00:00",
+  "target_url": "http://127.0.0.1:8741/",
+  "task": "Sign up for a FREE NimbusNotes account and reach the welcome screen.",
+  "n_runs": 1,
+  "n_completed": 1,
+  "n_failed": 0,
+  "n_unknown": 0,
+  "n_gave_up": 0,
+  "success_rate": 1.0,
+  "median_steps": 28,
+  "median_steps_completed": 28,
+  "avg_duration_s": 50.4,
+  "failure_points": {},
+  "friction_event_count": 10,
+  "friction_clusters": [
+    {
+      "title": "Confusion on /permissions.html",
+      "type": "confusion",
+      "page": "/permissions.html",
+      "count": 2,
+      "runs_affected": [
+        "run_000"
+      ],
+      "examples": [
+        {
+          "run": "run_000",
+          "step": 16,
+          "type": "confusion",
+          "page": "/permissions.html",
+          "detail": "\"\u2026s 'Please review your selections' but I don't see what's wrong \u2014 everything here is a preference. Clicking continue again.\""
+        },
+        {
+          "run": "run_000",
+          "step": 17,
+          "type": "confusion",
+          "page": "/permissions.html",
+          "detail": "\"\u2026which selection is the problem. This is frustrating.\""
+        }
+      ]
+    },
+    {
+      "title": "Confusion on /checkout.html",
+      "type": "confusion",
+      "page": "/checkout.html",
+      "count": 2,
+      "runs_affected": [
+        "run_000"
+      ],
+      "examples": [
+        {
+          "run": "run_000",
+          "step": 21,
+          "type": "confusion",
+          "page": "/checkout.html",
+          "detail": "\"\u2026' so I guess that's the way forward \u2014 I don't see a free option here.\""
+        },
+        {
+          "run": "run_000",
+          "step": 22,
+          "type": "confusion",
+          "page": "/checkout.html",
+          "detail": "\"\u2026page said no credit card required. This doesn't seem right \u2014 I need to go back.\""
+        }
+      ]
+    },
+    {
+      "title": "Hesitation on /signup.html",
+      "type": "hesitation",
+      "page": "/signup.html",
+      "count": 1,
+      "runs_affected": [
+        "run_000"
+      ],
+      "examples": [
+        {
+          "run": "run_000",
+          "step": 10,
+          "type": "hesitation",
+          "page": "/signup.html",
+          "detail": "Deliberated 30s before acting."
+        }
+      ]
+    },
+    {
+      "title": "Confusion on /signup.html",
+      "type": "confusion",
+      "page": "/signup.html",
+      "count": 1,
+      "runs_affected": [
+        "run_000"
+      ],
+      "examples": [
+        {
+          "run": "run_000",
+          "step": 10,
+          "type": "confusion",
+          "page": "/signup.html",
+          "detail": "\"Hmm, it says my password doesn't meet the requirements \u2014 but the requirements were never shown before I submitted. That's confusing. Now I c\u2026\""
+        }
+      ]
+    },
+    {
+      "title": "Rage Click on /permissions.html",
+      "type": "rage_click",
+      "page": "/permissions.html",
+      "count": 1,
+      "runs_affected": [
+        "run_000"
+      ],
+      "examples": [
+        {
+          "run": "run_000",
+          "step": 17,
+          "type": "rage_click",
+          "page": "/permissions.html",
+          "detail": "3 clicks within 28px around (445, 632)."
+        }
+      ]
+    },
+    {
+      "title": "Hesitation on /checkout.html",
+      "type": "hesitation",
+      "page": "/checkout.html",
+      "count": 1,
+      "runs_affected": [
+        "run_000"
+      ],
+      "examples": [
+        {
+          "run": "run_000",
+          "step": 22,
+          "type": "hesitation",
+          "page": "/checkout.html",
+          "detail": "Deliberated 26s before acting."
+        }
+      ]
+    },
+    {
+      "title": "Backtrack on /plan.html",
+      "type": "backtrack",
+      "page": "/plan.html",
+      "count": 1,
+      "runs_affected": [
+        "run_000"
+      ],
+      "examples": [
+        {
+          "run": "run_000",
+          "step": 23,
+          "type": "backtrack",
+          "page": "/plan.html",
+          "detail": "Returned to /plan.html after having moved past it."
+        }
+      ]
+    },
+    {
+      "title": "Confusion on /plan.html",
+      "type": "confusion",
+      "page": "/plan.html",
+      "count": 1,
+      "runs_affected": [
+        "run_000"
+      ],
+      "examples": [
+        {
+          "run": "run_000",
+          "step": 25,
+          "type": "confusion",
+          "page": "/plan.html",
+          "detail": "\"I still don't see it. Checking the top again.\""
+        }
+      ]
+    }
+  ],
+  "usage_totals": {},
+  "runs": [
+    {
+      "run_id": "run_000",
+      "persona": "scripted-baseline",
+      "completed": true,
+      "gave_up": false,
+      "stop_reason": "agent_done",
+      "steps": 28,
+      "duration_s": 50.4,
+      "friction_events": 10
+    }
+  ]
+}

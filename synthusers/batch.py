@@ -194,10 +194,12 @@ def _page_from_url(url: str) -> str:
     return urlparse(url).path if url else ""
 
 
-def run_batch(spec: Spec, headed: bool = False, runs_override: int | None = None) -> pathlib.Path:
+def run_batch(spec: Spec, headed: bool = False, runs_override: int | None = None,
+              batch_dir: pathlib.Path | None = None) -> pathlib.Path:
     n_runs = runs_override or spec.runs
-    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    batch_dir = pathlib.Path(spec.output_dir) / f"{spec.name}_{stamp}"
+    if batch_dir is None:
+        stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        batch_dir = pathlib.Path(spec.output_dir) / f"{spec.name}_{stamp}"
     batch_dir.mkdir(parents=True, exist_ok=True)
     (batch_dir / "spec.yaml").write_text(spec.path.read_text() if spec.path else "")
 
