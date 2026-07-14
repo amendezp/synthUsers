@@ -118,12 +118,6 @@ async function dashboard() {
 
   // -- hero: point the lab at any URL --------------------------------------
   const hero = el("section", "hero");
-  hero.append(el("h2", "hero-title", "Point synthetic users at your product."));
-  hero.append(el("p", "lead",
-    "Give the lab a URL and a task. A cast of AI users — different ages, patience " +
-    "levels and tech skills — will attempt it while you watch live: every click, " +
-    "every hesitation, every place they get stuck, distilled into prioritized fixes."));
-
   const form = el("div", "launch-panel hero-form");
   const url = Object.assign(el("input", "big-input"), {
     type: "text", placeholder: "https://staging.yourapp.com/",
@@ -161,7 +155,7 @@ async function dashboard() {
 
   const knobs = el("div", "knob-row");
   knobs.append(field("synthetic users", runs), field("personas", personaMode),
-               field("model", model), field("effort", effort));
+               field("model", model));
 
   // Email-based auth: checked → every run gets a receivable su.* inbox and the
   // check_email / open_email_link tools, so verification walls don't block it.
@@ -176,7 +170,8 @@ async function dashboard() {
   const more = el("details", "more-options");
   more.append(el("summary", null, "More options"));
   const moreRow = el("div", "knob-row");
-  moreRow.append(field("parallel sessions", parallel), field("max steps per user", maxSteps),
+  moreRow.append(field("effort", effort), field("parallel sessions", parallel),
+                 field("max steps per user", maxSteps),
                  field("inbox domain (for email auth)", emailDomain));
   more.append(moreRow);
 
@@ -187,10 +182,8 @@ async function dashboard() {
   if (!token.get()) tokenRow.append(field("admin token", heroToken));
 
   const launch = el("button", "primary cta", "Release the users →");
-  const hint = el("span", "cost-hint",
-    "Each synthetic user costs roughly $0.5–2 in API usage. Watching is free and shareable.");
   const ctaRow = el("div", "cta-row");
-  ctaRow.append(launch, hint);
+  ctaRow.append(launch);
 
   form.append(field("your url", url), field("the task", task),
               knobs, customPersonasField, emailRow, more, tokenRow, ctaRow);
@@ -279,8 +272,10 @@ async function dashboard() {
     badges.append(el("span", "badge", spec.driver));
     if (spec.needs_api_key) badges.append(el("span", "badge warn", "needs API key"));
     card.append(badges);
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
     card.append(el("div", "meta",
-      `${spec.runs} runs × ${spec.personas || "no"} persona(s) · parallel ${spec.parallel} · ${spec.target_url}`));
+      `${plural(spec.runs, "run")} × ${spec.personas ? plural(spec.personas, "persona") : "no personas"}` +
+      ` · parallel ${spec.parallel} · ${spec.target_url}`));
     card.onclick = () => {
       selected = spec;
       grid.querySelectorAll(".spec").forEach(c => c.classList.remove("selected"));
