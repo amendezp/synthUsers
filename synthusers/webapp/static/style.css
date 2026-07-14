@@ -219,14 +219,7 @@ textarea:focus { outline: none; border-color: var(--glass-border-strong);
 .token-bar input { width: 240px; }
 
 /* dashboard hero: the "test your URL" panel is the front door */
-.hero { margin: 30px 0 44px; }
-.hero-title {
-  font-family: var(--font-display); font-weight: 500; font-size: clamp(30px, 4.6vw, 46px);
-  line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 12px; max-width: 720px;
-}
-.hero .lead {
-  color: var(--text-secondary); font-size: 15.5px; max-width: 660px; margin-bottom: 22px;
-}
+.hero { margin: 26px 0 44px; }
 .hero-form { display: block; border: 1px solid var(--glass-border-strong);
              box-shadow: 0 18px 60px rgba(0, 0, 0, 0.18); }
 .hero-form > .field { margin-bottom: 14px; }
@@ -254,7 +247,6 @@ textarea:focus { outline: none; border-color: var(--glass-border-strong);
 .token-inline { margin-bottom: 14px; max-width: 420px; }
 .cta-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 button.cta { font-size: 15px; padding: 12px 26px; }
-.cost-hint { color: var(--text-tertiary); font-size: 12.5px; max-width: 340px; }
 
 /* tables */
 table {
