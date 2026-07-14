@@ -38,20 +38,29 @@ Point it at any URL by writing a spec (see below). To just browse the demo app:
 python3 -m synthusers serve            # → http://127.0.0.1:8700/
 ```
 
-A web UI over the harness: pick a spec, tweak knobs (runs, parallel, model,
-max steps), and launch from the browser. Each run streams live — the latest
-per-step screenshot beside a chat log of the agent's narrated reasoning — and
-the polished video player swaps in the moment a run finishes. Batch metrics
-and the full report appear when the batch completes.
+The landing page is the main demo: **paste any URL + a task and release a
+cast of synthetic users at it.** Personas are auto-generated to fit the task
+(one small LLM call; write your own or go generic if you prefer), the model
+defaults to a random draw per run and effort can be randomized too — variance
+is the point — and a checkbox turns on email-based auth so users can get past
+verification walls. Each run streams live: the latest per-step screenshot
+beside a chat log of the agent's narrated reasoning, with the polished video
+player swapping in the moment a run finishes. Batch metrics and prioritized
+friction findings appear when the batch completes.
+
+Preset studies (the friction lab) and past sessions sit below the fold.
 
 - **Share URLs**: `/batch/<id>` is read-only — send it to anyone who should
   watch (or replay) a batch. No token needed to view.
 - **Auth**: starting a batch requires the admin token, printed at startup
-  (pin it with `SYNTHUSERS_ADMIN_TOKEN`). Enter it in the dashboard header.
+  (pin it with `SYNTHUSERS_ADMIN_TOKEN`). The launch form asks for it inline.
+- **Default inbox domain**: set `SYNTHUSERS_EMAIL_DOMAIN` so the email-auth
+  checkbox works without typing a domain each time.
 - **CLI parity**: batches started with `synthusers run` show up in the
   dashboard too — all state derives from the `runs/` directory.
 - One batch runs at a time (the demo app's port is fixed per spec); the API
   returns 409 while one is in flight.
+- Specs marked `hidden: true` (test fixtures) stay out of the preset cards.
 
 ### Deploy (Railway / Fly / Render / any Docker host)
 
@@ -62,7 +71,8 @@ docker run -p 8700:8700 -e ANTHROPIC_API_KEY=sk-ant-... \
 ```
 
 On Railway: create a service from this repo (it detects the Dockerfile), set
-`ANTHROPIC_API_KEY` and `SYNTHUSERS_ADMIN_TOKEN` variables, and attach a
+`ANTHROPIC_API_KEY` and `SYNTHUSERS_ADMIN_TOKEN` (plus
+`SYNTHUSERS_EMAIL_DOMAIN` if you use email auth) variables, and attach a
 volume at `/app/runs` so batches survive redeploys. The runner needs a
 long-lived container — serverless platforms (e.g. Vercel) can't host the
 agents' browser sessions.
@@ -111,6 +121,8 @@ agent:
   model_pool: [claude-opus-4-8, claude-sonnet-5]   # optional: each run draws
                                    # a random model — capability as variance
   effort: high                     # low | medium | high | xhigh | max
+  effort_pool: [low, medium, high] # optional: each run draws a random effort
+                                   # — deliberation depth as variance
   max_steps: 40
   max_minutes: 12
 viewport: { width: 1280, height: 800 }
@@ -126,9 +138,10 @@ sampling parameters for approximating different kinds of users.
 ## Sign-in & email verification
 
 Many flows gate on email — verification links, sign-in codes, magic links.
-Set `email_domain` in the spec (or the "Email domain" field in the dashboard's
-custom-URL panel) and every run gets its own receivable address following a
-fixed convention:
+Set `email_domain` in the spec (or tick **"Allow email-based auth"** on the
+dashboard's launch form — it uses the server's `SYNTHUSERS_EMAIL_DOMAIN` by
+default) and every run gets its own receivable address following a fixed
+convention:
 
 ```
 su.{batch_id}.{run_id}@{email_domain}
@@ -194,6 +207,25 @@ address detours through a "verify your email" step, the lab spools a
 verification message, and the agent must read its inbox and follow the link
 (`specs/frictionlab-email-smoke.yaml` scripts this end-to-end; live specs get
 it automatically via `email_domain`).
+
+### Go-live checklist for real inbound mail
+
+Everything in the harness is already built — what remains is external, done
+once, and takes ~15 minutes with Cloudflare:
+
+1. **A domain you control** (a subdomain like `mail.yourdomain.com` is fine).
+2. **MX records** pointing at a receiver — add the domain to Cloudflare and
+   enable Email Routing (it configures MX/SPF for you), or create a catch-all
+   mailbox at any IMAP host.
+3. **Forwarding into the harness** — Cloudflare: catch-all route → Email
+   Worker (snippet above) → your dashboard's `/api/inbound-email`; IMAP: set
+   the `SYNTHUSERS_IMAP_*` env vars, no public URL needed.
+4. **Tell the harness the domain** — `SYNTHUSERS_EMAIL_DOMAIN=mail.yourdomain.com`
+   on the server, so the dashboard's email-auth checkbox just works.
+
+Note the harness only *receives* — nothing sends outbound mail, so there is
+no SMTP server, no SPF/DKIM sending reputation to manage, and PaaS port-25
+blocks don't matter.
 
 **Only point this at your own or staging properties.** Automated signups
 against third-party sites usually violate their terms of service.

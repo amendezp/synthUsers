@@ -99,6 +99,10 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/healthz":
             self._json(200, {"ok": True})
+        elif path == "/api/config":
+            # Public, non-secret dashboard config: the server's default
+            # receivable-mail domain (SYNTHUSERS_EMAIL_DOMAIN), if any.
+            self._json(200, {"email_domain": os.environ.get("SYNTHUSERS_EMAIL_DOMAIN") or None})
         elif path == "/" or path.startswith("/batch/"):
             self._file(STATIC_DIR / "index.html")
         elif path.startswith("/static/"):
@@ -160,6 +164,10 @@ class Handler(BaseHTTPRequestHandler):
         specs = []
         for spec_file in sorted(pathlib.Path("specs").glob("*.yaml")):
             try:
+                # `hidden: true` keeps a spec out of the dashboard cards (test
+                # fixtures etc.); it stays launchable by name via the API/CLI.
+                if (yaml.safe_load(spec_file.read_text()) or {}).get("hidden"):
+                    continue
                 spec = load_spec(spec_file)
                 specs.append({
                     "file": spec_file.name,
@@ -168,6 +176,7 @@ class Handler(BaseHTTPRequestHandler):
                     "parallel": spec.parallel,
                     "driver": spec.agent.driver,
                     "model": spec.agent.model,
+                    "effort": spec.agent.effort,
                     "max_steps": spec.agent.max_steps,
                     "max_minutes": spec.agent.max_minutes,
                     "personas": len(spec.personas),

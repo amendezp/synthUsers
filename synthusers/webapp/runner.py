@@ -12,6 +12,7 @@ import threading
 import traceback
 import urllib.parse
 
+from .. import personas as persona_gen
 from ..batch import run_batch
 from ..config import Persona, Spec, Success, Target, load_spec
 
@@ -30,6 +31,12 @@ KNOB_LIMITS = {"runs": (1, 50), "parallel": (1, 8), "max_steps": (1, 200)}
 # (computer_20251124 tool + adaptive thinking + effort) — probed empirically;
 # claude-haiku-4-5 does NOT (no adaptive thinking).
 RANDOM_MODEL_POOL = ["claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6"]
+
+EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
+# Pool for effort="random": deliberation depth as a user-diversity axis.
+# xhigh/max are excluded — they multiply cost/latency without adding much
+# behavioral spread over "high".
+RANDOM_EFFORT_POOL = ["low", "medium", "high"]
 
 
 class LaunchError(Exception):
@@ -84,10 +91,36 @@ def _custom_spec(body: dict) -> Spec:
     host = re.sub(r"[^a-z0-9]+", "-", parsed.netloc.lower()).strip("-")[:48] or "target"
     spec = Spec(name=f"custom-{host}", target=Target(url=url), task=task,
                 success=Success(judge=True))
+    # Custom targets default to a random model per run — variance is the point
+    # of pointing several synthetic users at a page. An explicit model knob in
+    # the request overrides this below.
+    spec.agent.model_pool = list(RANDOM_MODEL_POOL)
     persona = str(body.get("persona") or "").strip()
     if persona:
         spec.personas = [Persona(name="custom-persona", prompt=persona)]
     return spec
+
+
+def _apply_personas(spec: Spec, body: dict, overrides: dict) -> None:
+    """Resolve the personas request for a custom target: an explicit list,
+    'auto' (LLM-generated, curated fallback), or none (generic visitor).
+    Runs after knob overrides so the generated cast can match spec.runs."""
+    want = body.get("personas")
+    if isinstance(want, list):
+        cleaned = [str(p).strip() for p in want if str(p).strip()][:8]
+        if not cleaned:
+            raise LaunchError(400, "personas list is empty")
+        spec.personas = [Persona(f"custom-{i + 1}", p) for i, p in enumerate(cleaned)]
+        overrides["personas"] = f"custom ({len(cleaned)})"
+    elif want == "auto":
+        spec.personas = persona_gen.generate(spec.task, spec.target.url,
+                                             n=min(spec.runs, 6))
+        overrides["personas"] = "generated"
+    elif want in (None, "", "none"):
+        pass  # keep whatever the legacy `persona` field set (possibly nothing)
+    else:
+        raise LaunchError(400, 'personas must be "auto", a list of persona '
+                               'descriptions, or omitted')
 
 
 def _unique_batch_dir(output_dir: str, name: str) -> pathlib.Path:
@@ -144,6 +177,17 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
             else:
                 spec.agent.model = overrides["model"] = m
                 spec.agent.model_pool = None
+        if body.get("effort"):
+            e = str(body["effort"]).strip().lower()
+            if e == "random":
+                spec.agent.effort_pool = list(RANDOM_EFFORT_POOL)
+                overrides["effort"] = "random"
+            elif e in EFFORT_LEVELS:
+                spec.agent.effort = overrides["effort"] = e
+                spec.agent.effort_pool = None
+            else:
+                raise LaunchError(400, "effort must be one of "
+                                       f"{sorted(EFFORT_LEVELS)} or 'random'")
         if body.get("email_domain"):
             domain = str(body["email_domain"]).strip().lower()
             if "@" in domain or " " in domain or "." not in domain:
@@ -154,6 +198,8 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
             raise LaunchError(400, "ANTHROPIC_API_KEY is not set on the server; "
                                    "set it or pick a scripted-driver spec")
         _preflight_chromium()
+        if custom:
+            _apply_personas(spec, body, overrides)  # after preflight: "auto" needs the key
 
         batch_dir = _unique_batch_dir(spec.output_dir, spec.name)
         batch_dir.mkdir(parents=True, exist_ok=True)
@@ -166,8 +212,11 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
                 "parallel": spec.parallel,
                 "model": spec.agent.model,
                 "model_pool": spec.agent.model_pool,
+                "effort": spec.agent.effort,
+                "effort_pool": spec.agent.effort_pool,
                 "max_steps": spec.agent.max_steps,
                 "driver": spec.agent.driver,
+                "personas": [p.name for p in spec.personas] or None,
             },
             "launched_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }

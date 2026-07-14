@@ -46,6 +46,7 @@ class AgentConfig:
     model_pool: Optional[list] = None   # each run draws a random model from here
     judge_model: Optional[str] = None   # defaults to `model` (never the pool)
     effort: str = "high"
+    effort_pool: Optional[list] = None  # each run draws a random effort from here
     max_steps: int = 40
     max_minutes: float = 12.0
     keep_last_images: Optional[int] = None  # None = keep full screenshot history
@@ -92,6 +93,7 @@ def spec_to_dict(spec: Spec) -> dict:
             "model": spec.agent.model,
             "model_pool": spec.agent.model_pool,
             "effort": spec.agent.effort,
+            "effort_pool": spec.agent.effort_pool,
             "max_steps": spec.agent.max_steps,
             "max_minutes": spec.agent.max_minutes,
         },

@@ -31,25 +31,37 @@ const token = {
 /* models offered for computer-use runs; server accepts other IDs via the API.
    (claude-haiku-4-5 is out: it rejects the agent's adaptive-thinking calls.) */
 const MODEL_OPTIONS = [
+  ["random", "🎲 random model per run — drives variance"],
   ["claude-opus-4-8", "claude-opus-4-8 — most capable"],
   ["claude-sonnet-5", "claude-sonnet-5 — ~half the cost"],
   ["claude-sonnet-4-6", "claude-sonnet-4-6 — previous gen"],
-  ["random", "🎲 random per run — drives variance"],
 ];
 
-function modelSelect(initial, disabled = false) {
+const EFFORT_OPTIONS = [
+  ["high", "effort: high — default"],
+  ["random", "🎲 random effort per run (low/med/high)"],
+  ["low", "effort: low — hastier users"],
+  ["medium", "effort: medium"],
+  ["xhigh", "effort: xhigh — very deliberate"],
+  ["max", "effort: max"],
+];
+
+function optionSelect(options, initial, disabled = false) {
   const select = el("select");
-  const ids = MODEL_OPTIONS.map(([id]) => id);
+  const ids = options.map(([id]) => id);
   if (initial && !ids.includes(initial)) {
     select.append(Object.assign(el("option", null, initial), { value: initial }));
   }
-  for (const [id, label] of MODEL_OPTIONS) {
+  for (const [id, label] of options) {
     select.append(Object.assign(el("option", null, label), { value: id }));
   }
   if (initial) select.value = initial;
   select.disabled = disabled;
   return select;
 }
+
+const modelSelect = (initial, disabled) => optionSelect(MODEL_OPTIONS, initial, disabled);
+const effortSelect = (initial, disabled) => optionSelect(EFFORT_OPTIONS, initial, disabled);
 
 /* same-tab image viewer: click a screenshot to enlarge, click/Escape to close */
 const lightbox = (() => {
@@ -95,11 +107,156 @@ async function dashboard() {
   const errBox = el("div");
   $app.append(errBox);
 
-  // -- kickoff -----------------------------------------------------------
-  $app.append(el("h2", null, "Start a batch"));
+  let config = {};
+  try { config = await getJSON("/api/config"); } catch { /* older server */ }
+
+  function field(label, input) {
+    const f = el("div", "field");
+    f.append(el("label", null, label), input);
+    return f;
+  }
+
+  // -- hero: point the lab at any URL --------------------------------------
+  const hero = el("section", "hero");
+  hero.append(el("h2", "hero-title", "Point synthetic users at your product."));
+  hero.append(el("p", "lead",
+    "Give the lab a URL and a task. A cast of AI users — different ages, patience " +
+    "levels and tech skills — will attempt it while you watch live: every click, " +
+    "every hesitation, every place they get stuck, distilled into prioritized fixes."));
+
+  const form = el("div", "launch-panel hero-form");
+  const url = Object.assign(el("input", "big-input"), {
+    type: "text", placeholder: "https://staging.yourapp.com/",
+  });
+  const task = el("textarea");
+  task.placeholder = 'What should they try to do? Say what "done" looks like — e.g. ' +
+    '"Sign up for a free account. You are done when you reach the dashboard."';
+
+  const personaMode = optionSelect([
+    ["auto", "🎭 auto-generate a diverse cast"],
+    ["none", "generic first-time visitor"],
+    ["custom", "write your own personas…"],
+  ], "auto");
+  const customPersonas = el("textarea");
+  customPersonas.placeholder = "One persona per paragraph (blank line between them) — " +
+    "e.g. \"You are a 61-year-old teacher who is not confident with technology…\"";
+  const customPersonasField = field("your personas", customPersonas);
+  customPersonasField.style.display = "none";
+  personaMode.onchange = () => {
+    customPersonasField.style.display = personaMode.value === "custom" ? "" : "none";
+  };
+
+  const model = modelSelect("random");
+  const effort = effortSelect("high");
+  const runs = Object.assign(el("input"), { type: "number", min: 1, max: 50, value: 3 });
+
+  const parallel = Object.assign(el("input"), { type: "number", min: 1, max: 8, value: 2 });
+  const maxSteps = Object.assign(el("input"), { type: "number", min: 1, max: 200, value: 25 });
+  const emailDomain = Object.assign(el("input"), {
+    type: "text",
+    placeholder: config.email_domain
+      ? `inbox domain — server default: ${config.email_domain}`
+      : "mail.yourdomain.com — domain whose mail reaches this server",
+  });
+
+  const knobs = el("div", "knob-row");
+  knobs.append(field("synthetic users", runs), field("personas", personaMode),
+               field("model", model), field("effort", effort));
+
+  // Email-based auth: checked → every run gets a receivable su.* inbox and the
+  // check_email / open_email_link tools, so verification walls don't block it.
+  const emailAuth = Object.assign(el("input"), { type: "checkbox" });
+  const emailLabel = el("label", "check-label");
+  emailLabel.append(emailAuth, el("span", null,
+    "Allow email-based auth — each user gets a real inbox for verification links & sign-in codes" +
+    (config.email_domain ? ` (@${config.email_domain})` : "")));
+  const emailRow = el("div", "check-row");
+  emailRow.append(emailLabel);
+
+  const more = el("details", "more-options");
+  more.append(el("summary", null, "More options"));
+  const moreRow = el("div", "knob-row");
+  moreRow.append(field("parallel sessions", parallel), field("max steps per user", maxSteps),
+                 field("inbox domain (for email auth)", emailDomain));
+  more.append(moreRow);
+
+  const tokenRow = el("div", "token-inline");
+  const heroToken = Object.assign(el("input"), {
+    type: "password", placeholder: "admin token — printed when the server starts",
+  });
+  if (!token.get()) tokenRow.append(field("admin token", heroToken));
+
+  const launch = el("button", "primary cta", "Release the users →");
+  const hint = el("span", "cost-hint",
+    "Each synthetic user costs roughly $0.5–2 in API usage. Watching is free and shareable.");
+  const ctaRow = el("div", "cta-row");
+  ctaRow.append(launch, hint);
+
+  form.append(field("your url", url), field("the task", task),
+              knobs, customPersonasField, emailRow, more, tokenRow, ctaRow);
+  hero.append(form);
+  $app.append(hero);
+
+  launch.onclick = async () => {
+    if (!token.get()) {
+      const t = heroToken.value.trim();
+      if (!t) {
+        showError(errBox, "Enter the admin token (printed in the server logs at startup) to launch.");
+        heroToken.focus();
+        return;
+      }
+      token.set(t);
+    }
+    let personas;
+    if (personaMode.value === "auto") personas = "auto";
+    if (personaMode.value === "custom") {
+      personas = customPersonas.value.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+      if (!personas.length) {
+        showError(errBox, "Write at least one persona (or switch personas back to auto).");
+        return;
+      }
+    }
+    let email_domain;   // the checkbox is the gate; the field just overrides the default
+    if (emailAuth.checked) {
+      email_domain = emailDomain.value.trim() || config.email_domain || "";
+      if (!email_domain) {
+        showError(errBox, "Email auth needs an inbox domain: set one under More options, " +
+          "or configure SYNTHUSERS_EMAIL_DOMAIN on the server.");
+        more.open = true;
+        emailDomain.focus();
+        return;
+      }
+    }
+    launch.disabled = true;
+    launch.textContent = personaMode.value === "auto"
+      ? "Casting personas & launching… (~15s)" : "Launching…";
+    try {
+      const resp = await fetch("/api/batches", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token.get()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: url.value.trim(), task: task.value.trim(),
+          personas,
+          email_domain,
+          runs: Number(runs.value), parallel: Number(parallel.value),
+          max_steps: Number(maxSteps.value), model: model.value, effort: effort.value,
+        }),
+      });
+      const body = await resp.json();
+      if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+      location.href = body.url;
+    } catch (e) {
+      showError(errBox, String(e.message || e));
+      launch.disabled = false;
+      launch.textContent = "Release the users →";
+    }
+  };
+
+  // -- preset studies -------------------------------------------------------
+  $app.append(el("h2", null, "Preset studies"));
   if (!token.get()) {
     $app.append(el("p", "notice",
-      "Viewer mode — enter the admin token above to launch batches. Watching live batches needs no token."));
+      "Viewer mode — launching (here or above) needs the admin token. Watching live batches needs no token."));
   }
 
   let specs = [];
@@ -134,12 +291,6 @@ async function dashboard() {
   }
   $app.append(grid, panel);
 
-  function field(label, input) {
-    const f = el("div", "field");
-    f.append(el("label", null, label), input);
-    return f;
-  }
-
   function renderPanel() {
     if (!token.get() || !selected) { panel.style.display = "none"; return; }
     panel.style.display = "";
@@ -147,7 +298,9 @@ async function dashboard() {
     const runs = Object.assign(el("input"), { type: "number", min: 1, max: 50, value: selected.runs });
     const parallel = Object.assign(el("input"), { type: "number", min: 1, max: 8, value: selected.parallel });
     const maxSteps = Object.assign(el("input"), { type: "number", min: 1, max: 200, value: selected.max_steps });
-    const model = modelSelect(selected.model, selected.driver !== "computer_use");
+    const isCU = selected.driver === "computer_use";
+    const model = modelSelect(selected.model, !isCU);
+    const effort = effortSelect(selected.effort || "high", !isCU);
     const launch = el("button", "primary", `Launch ${selected.name}`);
     launch.onclick = async () => {
       launch.disabled = true;
@@ -159,7 +312,8 @@ async function dashboard() {
             spec: selected.file,
             runs: Number(runs.value), parallel: Number(parallel.value),
             max_steps: Number(maxSteps.value),
-            model: selected.driver === "computer_use" ? model.value : undefined,
+            model: isCU ? model.value : undefined,
+            effort: isCU ? effort.value : undefined,
           }),
         });
         const body = await resp.json();
@@ -171,66 +325,12 @@ async function dashboard() {
       }
     };
     panel.append(field("runs", runs), field("parallel", parallel),
-                 field("max steps", maxSteps), field("model", model), launch);
-  }
-
-  // -- custom target -------------------------------------------------------
-  $app.append(el("h2", null, "Test any URL"));
-  if (!token.get()) {
-    $app.append(el("p", "notice", "Enter the admin token above to point the lab at any site."));
-  } else {
-    const cpanel = el("div", "launch-panel custom-panel");
-    const url = Object.assign(el("input"), {
-      type: "text", placeholder: "https://staging.yourapp.com/",
-    });
-    const task = el("textarea");
-    task.placeholder = 'What should the synthetic user do? Say what "done" looks like — ' +
-      'e.g. "Sign up for a free account. You are done when you reach the dashboard."';
-    const persona = el("textarea");
-    persona.placeholder = "Optional persona — e.g. \"You are a 61-year-old teacher who is " +
-      "not confident with technology. You read everything carefully…\"";
-    const emailDomain = Object.assign(el("input"), {
-      type: "text", placeholder: "mail.yourdomain.com — gives each run a receivable inbox",
-    });
-    const runs = Object.assign(el("input"), { type: "number", min: 1, max: 50, value: 1 });
-    const parallel = Object.assign(el("input"), { type: "number", min: 1, max: 8, value: 1 });
-    const maxSteps = Object.assign(el("input"), { type: "number", min: 1, max: 200, value: 25 });
-    const model = modelSelect("claude-opus-4-8");
-    const launch = el("button", "primary", "Launch custom target");
-    launch.onclick = async () => {
-      launch.disabled = true;
-      try {
-        const resp = await fetch("/api/batches", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${token.get()}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: url.value.trim(), task: task.value.trim(),
-            persona: persona.value.trim() || undefined,
-            email_domain: emailDomain.value.trim() || undefined,
-            runs: Number(runs.value), parallel: Number(parallel.value),
-            max_steps: Number(maxSteps.value), model: model.value,
-          }),
-        });
-        const body = await resp.json();
-        if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
-        location.href = body.url;
-      } catch (e) {
-        showError(errBox, String(e.message || e));
-        launch.disabled = false;
-      }
-    };
-    const knobs = el("div", "knob-row");
-    knobs.append(field("runs", runs), field("parallel", parallel),
-                 field("max steps", maxSteps), field("model", model), launch);
-    cpanel.append(field("target url", url), field("task", task),
-                  field("persona (optional)", persona),
-                  field("email domain (optional — for signup/verification flows)", emailDomain),
-                  knobs);
-    $app.append(cpanel);
+                 field("max steps", maxSteps), field("model", model),
+                 field("effort", effort), launch);
   }
 
   // -- batches list --------------------------------------------------------
-  $app.append(el("h2", null, "Batches"));
+  $app.append(el("h2", null, "Past sessions"));
   const tableBox = el("div");
   $app.append(tableBox);
 
@@ -317,13 +417,17 @@ function batchView(batchId) {
     const meta = el("div", "run-meta");
     const params = el("div", "run-params");
     if (batchInfo.driver) params.append(el("span", "badge", batchInfo.driver));
-    let modelBadge = null;
+    let modelBadge = null, effortBadge = null;
     if (batchInfo.driver !== "scripted" && (batchInfo.model || batchInfo.model_pool)) {
       modelBadge = el("span", "badge",
         batchInfo.model_pool ? "🎲 random model" : batchInfo.model);
       params.append(modelBadge);
     }
-    if (batchInfo.effort) params.append(el("span", "badge", `effort ${batchInfo.effort}`));
+    if (batchInfo.driver !== "scripted" && (batchInfo.effort || batchInfo.effort_pool)) {
+      effortBadge = el("span", "badge",
+        batchInfo.effort_pool ? "🎲 random effort" : `effort ${batchInfo.effort}`);
+      params.append(effortBadge);
+    }
     params.append(el("span", "badge", `≤ ${batchInfo.max_steps} steps`));
     meta.append(params);
     if (assigned && assigned.prompt) {
@@ -367,7 +471,7 @@ function batchView(batchId) {
     runGrid.insertBefore(root, after ? runCards.get(after).root : null);
 
     const handle = {
-      root, img, placeholder, screen, chat, status, persona, modelBadge,
+      root, img, placeholder, screen, chat, status, persona, modelBadge, effortBadge,
       stepCounter, lat, url, maxStep: -1, finished: false, statusName: "pending",
       setStatus(name) {
         if (this.statusName === name) return;
@@ -423,6 +527,7 @@ function batchView(batchId) {
     card.setStatus(status);
     if (meta.persona) card.persona.textContent = meta.persona;
     if (meta.model && card.modelBadge) card.modelBadge.textContent = meta.model;
+    if (meta.effort && card.effortBadge) card.effortBadge.textContent = `effort ${meta.effort}`;
 
     if (meta.video) {
       const video = Object.assign(el("video"), {
