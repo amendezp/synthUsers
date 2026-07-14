@@ -144,6 +144,11 @@ def launch(specs_dir: pathlib.Path, body: dict) -> dict:
             else:
                 spec.agent.model = overrides["model"] = m
                 spec.agent.model_pool = None
+        if body.get("email_domain"):
+            domain = str(body["email_domain"]).strip().lower()
+            if "@" in domain or " " in domain or "." not in domain:
+                raise LaunchError(400, "email_domain should look like mail.example.com")
+            spec.email_domain = overrides["email_domain"] = domain
 
         if spec.agent.driver == "computer_use" and not os.environ.get("ANTHROPIC_API_KEY"):
             raise LaunchError(400, "ANTHROPIC_API_KEY is not set on the server; "

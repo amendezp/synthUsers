@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check your email — NimbusNotes</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav>
+  <span class="logo">☁ NimbusNotes</span>
+  <span class="spacer"></span>
+  <a href="index.html">Back to home</a>
+</nav>
+<div class="container" style="max-width:560px">
+  <div class="progress"><span class="on"></span><span></span><span></span></div>
+  <div class="card">
+    <h2>Verify your email</h2>
+    <p>We sent a verification link to <b id="sent-to">your email address</b>.
+       Open the email and click the link to continue setting up your workspace.</p>
+    <p class="hint show">Didn't get it? Check your spam folder, or
+       <a href="#" id="resend">resend the email</a>.</p>
+  </div>
+</div>
+<script>
+const to = new URLSearchParams(location.search).get('to') || '';
+if (to) document.getElementById('sent-to').textContent = to;
+document.getElementById('resend').addEventListener('click', function (ev) {
+  ev.preventDefault();
+  if (!to) return;
+  fetch('/api/send-verification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: to }),
+  });
+  ev.target.textContent = 'sent again ✓';
+});
+</script>
+</body>
+</html>

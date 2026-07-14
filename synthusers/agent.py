@@ -15,6 +15,7 @@ import dataclasses
 import time
 from typing import Any, Optional
 
+from . import inbox
 from .config import COMPUTER_USE_BETA, AgentConfig, Persona
 from .executor import ComputerExecutor
 from .trace import TraceRecorder
@@ -64,12 +65,14 @@ def _extract_reasoning(content: list) -> str:
 
 
 class ComputerUseAgent:
-    def __init__(self, cfg: AgentConfig, persona: Optional[Persona], viewport: dict):
+    def __init__(self, cfg: AgentConfig, persona: Optional[Persona], viewport: dict,
+                 email: Optional[str] = None):
         import anthropic  # deferred so scripted runs work without the SDK configured
 
         self.cfg = cfg
         self.persona = persona
         self.viewport = viewport
+        self.email = email
         self.client = anthropic.Anthropic()
         self.usage_totals = {"input_tokens": 0, "output_tokens": 0,
                              "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
@@ -77,13 +80,34 @@ class ComputerUseAgent:
     # -- message plumbing ------------------------------------------------
 
     def _tools(self) -> list[dict]:
-        return [{
+        tools: list[dict] = [{
             "type": "computer_20251124",
             "name": "computer",
             "display_width_px": self.viewport["width"],
             "display_height_px": self.viewport["height"],
             "enable_zoom": True,
         }]
+        if self.email:
+            tools.append({
+                "name": "check_email",
+                "description": (f"Read the inbox of your own email address ({self.email}). "
+                                "Returns the most recent messages with any links and codes "
+                                "extracted. Use it when the site says it sent you an email "
+                                "(verification link, sign-in code, magic link)."),
+                "input_schema": {"type": "object", "properties": {},
+                                 "additionalProperties": False},
+            })
+            tools.append({
+                "name": "open_email_link",
+                "description": ("Open a link from an email in your inbox — the equivalent "
+                                "of clicking it in your mail app. Only links that actually "
+                                "appear in received emails can be opened."),
+                "input_schema": {"type": "object",
+                                 "properties": {"url": {"type": "string",
+                                                        "description": "A link exactly as it appears in a received email"}},
+                                 "required": ["url"], "additionalProperties": False},
+            })
+        return tools
 
     def _system(self) -> list[dict]:
         return [{
@@ -191,6 +215,29 @@ class ComputerUseAgent:
 
             tool_results = []
             for tu in tool_uses:
+                if tu.name in ("check_email", "open_email_link"):
+                    t1 = time.monotonic()
+                    action, content, is_error, shot_path, png = self._email_tool(tu, executor, trace)
+                    if png is not None:
+                        last_png = png
+                    trace.record_step(
+                        action=action,
+                        reasoning=reasoning,
+                        url=executor.page.url,
+                        screenshot=shot_path,
+                        annotated=None,
+                        model_latency_s=model_latency,
+                        exec_latency_s=time.monotonic() - t1,
+                        error=(content[0]["text"] if is_error else None),
+                    )
+                    reasoning = ""
+                    model_latency = 0.0
+                    steps += 1
+                    tool_results.append({"type": "tool_result", "tool_use_id": tu.id,
+                                         "content": content,
+                                         **({"is_error": True} if is_error else {})})
+                    continue
+
                 action = dict(tu.input)
                 annotated = trace.save_annotated(last_png, action)
 
@@ -226,6 +273,41 @@ class ComputerUseAgent:
 
             messages.append({"role": "user", "content": tool_results})
 
+    def _email_tool(self, tu: Any, executor: ComputerExecutor, trace: TraceRecorder,
+                    ) -> tuple[dict, list, bool, Optional[str], Optional[bytes]]:
+        """-> (trace_action, tool_result_content, is_error, screenshot_path, png)."""
+        if tu.name == "check_email":
+            text, summary = inbox.check(self.email or "", trace.run_dir)
+            return ({"action": "check_email", **summary},
+                    [{"type": "text", "text": text}], False, None, None)
+
+        url = str((tu.input or {}).get("url", "")).strip()
+        allowed = {link
+                   for msg in inbox.read_inbox(trace.run_dir)
+                   for link in inbox.extract_links(msg)}
+        if url not in allowed:
+            return ({"action": "open_email_link", "url": url},
+                    [{"type": "text",
+                      "text": "That link does not appear in any email you have "
+                              "received. Use check_email first and open a link "
+                              "exactly as it appears there."}],
+                    True, None, None)
+        try:
+            executor.page.goto(url, wait_until="domcontentloaded")
+            executor.page.wait_for_timeout(500)
+        except Exception as e:
+            return ({"action": "open_email_link", "url": url},
+                    [{"type": "text", "text": f"Failed to open the link: {e}"}],
+                    True, None, None)
+        png = executor.screenshot()
+        shot_path = trace.save_screenshot(png, "after")
+        content = [
+            {"type": "text", "text": "Opened the link from the email. The browser now shows:"},
+            {"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                         "data": base64.b64encode(png).decode()}},
+        ]
+        return ({"action": "open_email_link", "url": url}, content, False, shot_path, png)
+
     def _finish(self, stop_reason: str, final_text: str, steps: int, start: float,
                 error: Optional[str] = None) -> RunResult:
         return RunResult(
@@ -239,11 +321,21 @@ class ComputerUseAgent:
 
 
 class ScriptedAgent:
-    """Replays a fixed action script through the executor. No API calls."""
+    """Replays a fixed action script through the executor. No API calls.
 
-    def __init__(self, cfg: AgentConfig, persona: Optional[Persona], viewport: dict):
+    Beyond executor actions, scripts may use:
+      {action: check_email}                — read the run's inbox
+      {action: open_email_link, index: 0}  — navigate to a link from the
+                                             latest email (the offline stand-in
+                                             for clicking it in a mail client)
+    and "{email}" in any `text` is replaced with the run's address.
+    """
+
+    def __init__(self, cfg: AgentConfig, persona: Optional[Persona], viewport: dict,
+                 email: Optional[str] = None):
         self.cfg = cfg
         self.script = cfg.script or []
+        self.email = email
 
     def run(self, executor: ComputerExecutor, trace: TraceRecorder, task: str) -> RunResult:
         start = time.monotonic()
@@ -265,6 +357,18 @@ class ScriptedAgent:
                 break
             if pause:
                 executor.page.wait_for_timeout(int(min(pause, 2.0) * 1000))
+            if self.email and isinstance(entry.get("text"), str):
+                entry["text"] = entry["text"].replace("{email}", self.email)
+
+            if entry.get("action") in ("check_email", "open_email_link"):
+                action, shot_path, error = self._email_action(entry, executor, trace)
+                if shot_path:
+                    last_png = (trace.run_dir / shot_path).read_bytes()
+                trace.record_step(action, reasoning, executor.page.url, shot_path, None,
+                                  model_latency_s=pause, error=error)
+                steps += 1
+                continue
+
             if entry.get("action") == "click_selector":
                 entry = self._resolve_selector_click(executor, entry)
             annotated = trace.save_annotated(last_png, entry)
@@ -285,6 +389,23 @@ class ScriptedAgent:
         return RunResult(stop_reason=stop, final_text=final_text, steps=steps,
                          duration_s=time.monotonic() - start)
 
+    def _email_action(self, entry: dict, executor: ComputerExecutor,
+                      trace: TraceRecorder) -> tuple[dict, Optional[str], Optional[str]]:
+        """-> (trace_action, screenshot_path, error) for the email pseudo-actions."""
+        _, summary = inbox.check(self.email or "", trace.run_dir)
+        if entry["action"] == "check_email":
+            return {"action": "check_email", **summary}, None, None
+        messages = inbox.read_inbox(trace.run_dir)
+        links = inbox.extract_links(messages[-1]) if messages else []
+        index = int(entry.get("index", 0))
+        if index >= len(links):
+            return ({"action": "open_email_link", "index": index}, None,
+                    "no such link in the latest email")
+        executor.page.goto(links[index], wait_until="domcontentloaded")
+        shot = executor.screenshot()
+        return ({"action": "open_email_link", "index": index, "url": links[index]},
+                trace.save_screenshot(shot, "after"), None)
+
     @staticmethod
     def _resolve_selector_click(executor: ComputerExecutor, entry: dict) -> dict:
         """Turn {action: click_selector, selector: ...} into a coordinate click,
@@ -301,7 +422,8 @@ class ScriptedAgent:
                                int(box["y"] + box["height"] / 2)]}
 
 
-def make_agent(cfg: AgentConfig, persona: Optional[Persona], viewport: dict):
+def make_agent(cfg: AgentConfig, persona: Optional[Persona], viewport: dict,
+               email: Optional[str] = None):
     if cfg.driver == "scripted":
-        return ScriptedAgent(cfg, persona, viewport)
-    return ComputerUseAgent(cfg, persona, viewport)
+        return ScriptedAgent(cfg, persona, viewport, email=email)
+    return ComputerUseAgent(cfg, persona, viewport, email=email)

@@ -64,6 +64,7 @@ class Spec:
     viewport: dict = dataclasses.field(default_factory=lambda: {"width": 1280, "height": 800})
     personas: list[Persona] = dataclasses.field(default_factory=list)
     output_dir: str = "runs"
+    email_domain: Optional[str] = None  # each run gets su.{batch}.{run}@{domain}
     path: Optional[pathlib.Path] = None
 
     def persona_for_run(self, index: int) -> Optional[Persona]:
@@ -96,6 +97,7 @@ def spec_to_dict(spec: Spec) -> dict:
         },
         "viewport": spec.viewport,
         "output_dir": spec.output_dir,
+        "email_domain": spec.email_domain,
     }
     if spec.target.local_app:
         d["target"]["local_app"] = dataclasses.asdict(spec.target.local_app)
@@ -137,5 +139,6 @@ def load_spec(path: str | pathlib.Path) -> Spec:
         viewport=dict(raw.get("viewport", {"width": 1280, "height": 800})),
         personas=personas,
         output_dir=raw.get("output_dir", "runs"),
+        email_domain=raw.get("email_domain"),
         path=path,
     )

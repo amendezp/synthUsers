@@ -103,6 +103,8 @@ success:
   judge: true                      # LLM judge cross-check / fallback
 runs: 30
 parallel: 3
+email_domain: mail.example.com     # optional: each run gets a receivable
+                                   # su.* inbox (see "Sign-in & email verification")
 agent:
   driver: computer_use             # or "scripted" (offline, fixed action list)
   model: claude-opus-4-8
@@ -120,6 +122,81 @@ personas:
 Personas rotate across runs. They are the main lever for varying behavior —
 patience, reading depth, privacy sensitivity — which matters more than
 sampling parameters for approximating different kinds of users.
+
+## Sign-in & email verification
+
+Many flows gate on email — verification links, sign-in codes, magic links.
+Set `email_domain` in the spec (or the "Email domain" field in the dashboard's
+custom-URL panel) and every run gets its own receivable address following a
+fixed convention:
+
+```
+su.{batch_id}.{run_id}@{email_domain}
+e.g. su.frictionlab-onboarding_20260714_1200.run_003@mail.example.com
+```
+
+The convention does three jobs: the local part routes an inbound message to
+the exact run that owns it, makes synthetic signups trivially identifiable in
+your product's database, and enables cleanup — every batch also writes
+`accounts.json` listing each address with its run, persona and model, so you
+can purge test accounts after a study.
+
+The agent's task is suffixed with its address, and two extra tools appear:
+
+- **`check_email`** — reads the run's inbox; messages are returned with links
+  and 4–8 digit codes pre-extracted.
+- **`open_email_link`** — the equivalent of clicking a link in a mail app.
+  Only URLs that literally appear in a received email can be opened, so the
+  "never type URLs" realism rule holds.
+
+Received messages are stored under `run_*/inbox/` and appear in the trace,
+report and live dashboard as 📧 steps.
+
+### Getting mail into the harness
+
+Inbound mail is decoupled from any mail server — three ingestion paths:
+
+1. **HTTP webhook** (recommended for hosted dashboards): POST messages to
+   `/api/inbound-email` with the admin token. Pairs naturally with
+   [Cloudflare Email Routing](https://developers.cloudflare.com/email-routing/)
+   — point your domain's MX at Cloudflare (free), catch-all to an Email
+   Worker like:
+
+   ```js
+   export default {
+     async email(message, env) {
+       const raw = await new Response(message.raw).text();
+       await fetch("https://your-dashboard.example.com/api/inbound-email", {
+         method: "POST",
+         headers: { "Authorization": `Bearer ${env.SYNTHUSERS_ADMIN_TOKEN}`,
+                    "Content-Type": "application/json" },
+         body: JSON.stringify({ to: message.to, from: message.from,
+                                subject: message.headers.get("subject") || "",
+                                text: raw }),
+       });
+     }
+   }
+   ```
+
+2. **IMAP polling** (no public URL needed): create a catch-all mailbox for
+   the domain at any mail host, then set `SYNTHUSERS_IMAP_HOST`,
+   `SYNTHUSERS_IMAP_USER`, `SYNTHUSERS_IMAP_PASS` (and optionally
+   `SYNTHUSERS_IMAP_FOLDER`). The harness polls while runs wait on
+   `check_email`.
+
+3. **Local spool** (offline / testing): drop message JSON files into
+   `runs/_spool/` — this is how the friction lab "sends" verification mail
+   with zero infrastructure. Messages whose address doesn't parse or whose
+   run can't be found park in `runs/_unrouted/` for inspection.
+
+The friction lab exercises the whole loop offline: signing up with a `su.*`
+address detours through a "verify your email" step, the lab spools a
+verification message, and the agent must read its inbox and follow the link
+(`specs/frictionlab-email-smoke.yaml` scripts this end-to-end; live specs get
+it automatically via `email_domain`).
+
+**Only point this at your own or staging properties.** Automated signups
+against third-party sites usually violate their terms of service.
 
 ## How it works
 

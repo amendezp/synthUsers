@@ -21,6 +21,8 @@ success:
 
 runs: 6
 parallel: 2
+email_domain: mail.lab.test   # runs get receivable su.* inboxes; the lab's
+                              # signup detours them through email verification
 
 agent:
   driver: computer_use
