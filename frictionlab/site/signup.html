@@ -60,6 +60,19 @@ document.getElementById('signup-form').addEventListener('submit', function (ev) 
     document.getElementById('pw-rules').classList.add('show'); // rules only appear now
     return;
   }
+  // Synthetic-user addresses (su.<batch>.<run>@…) take the email-verification
+  // detour, so the harness's inbox loop is exercised; everything else keeps
+  // the original flow and the recorded smoke script stays valid.
+  if (/^su\./i.test(email)) {
+    fetch('/api/send-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email }),
+    }).finally(function () {
+      window.location.href = 'check-email.html?to=' + encodeURIComponent(email);
+    });
+    return;
+  }
   window.location.href = 'permissions.html';
 });
 </script>

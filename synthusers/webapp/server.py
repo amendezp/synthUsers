@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
+from .. import inbox
 from ..config import load_spec
 from . import runner, state
 
@@ -126,7 +127,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route_post(self):
         path = urlparse(self.path).path
-        if path != "/api/batches":
+        if path not in ("/api/batches", "/api/inbound-email"):
             self._json(404, {"error": "not found"})
             return
         if not self._authorized():
@@ -138,6 +139,15 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self._json(400, {"error": "invalid JSON body"})
             return
+
+        if path == "/api/inbound-email":
+            # e.g. a Cloudflare Email Routing worker POSTing parsed messages:
+            # {to, from, subject, text, html} or {"messages": [...]}
+            messages = body.get("messages") if isinstance(body.get("messages"), list) else [body]
+            routed = sum(1 for m in messages if isinstance(m, dict) and inbox.deliver(m))
+            self._json(200, {"received": len(messages), "routed": routed})
+            return
+
         try:
             result = runner.launch(pathlib.Path("specs"), body)
             self._json(201, result)

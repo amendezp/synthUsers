@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 import yaml
 from playwright.sync_api import sync_playwright
 
-from . import friction, verdict
+from . import friction, inbox, verdict
 from .agent import make_agent
 from .browser import finalize_video, launch_browser, new_session
 from .config import Spec, spec_to_dict
@@ -71,6 +71,15 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
     if spec.agent.model_pool and spec.agent.driver == "computer_use":
         agent_cfg = dataclasses.replace(spec.agent, model=random.choice(spec.agent.model_pool))
 
+    task = spec.task
+    email = None
+    if spec.email_domain:
+        email = inbox.make_address(batch_dir.name, run_id, spec.email_domain)
+        task += (f"\n\nYour email address for this task is exactly: {email} — use it "
+                 "whenever the site asks for an email. When the site says it emailed "
+                 "you (a verification link, a code), use the check_email tool to read "
+                 "your inbox.")
+
     final_url, final_text_page = "", ""
     with sync_playwright() as pw:
         browser = launch_browser(pw, headed=headed)
@@ -78,8 +87,8 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
         try:
             page.goto(spec.target.url, wait_until="domcontentloaded")
             executor = ComputerExecutor(page, spec.viewport)
-            agent = make_agent(agent_cfg, persona, spec.viewport)
-            result = agent.run(executor, trace, spec.task)
+            agent = make_agent(agent_cfg, persona, spec.viewport, email=email)
+            result = agent.run(executor, trace, task)
             final_url = page.url
             try:
                 final_text_page = page.inner_text("body", timeout=3000)
@@ -102,6 +111,7 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
         "viewport": spec.viewport,
         "driver": spec.agent.driver,
         "model": agent_cfg.model if spec.agent.driver == "computer_use" else None,
+        "email": email,
         "stop_reason": result.stop_reason,
         "final_text": result.final_text,
         "final_url": final_url,
@@ -196,6 +206,17 @@ def aggregate(spec: Spec, batch_dir: pathlib.Path, metas: list[dict]) -> dict:
         ],
     }
     (batch_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+    # Cleanup manifest: every synthetic account this batch may have created in
+    # the target app, identifiable by address for later deletion.
+    accounts = [{"run_id": m["run_id"], "email": m["email"], "persona": m["persona"],
+                 "model": m.get("model")}
+                for m in metas if m.get("email")]
+    if accounts:
+        (batch_dir / "accounts.json").write_text(json.dumps({
+            "generated_at": metrics["generated_at"],
+            "accounts": accounts,
+        }, indent=2))
     return metrics
 
 

@@ -1,0 +1,53 @@
+# Offline smoke test for the email-verification loop: a scripted user signs up
+# with a synthetic (su.*) address, which routes friction-lab's signup through
+# the verify-your-email step; the script reads the run's inbox and follows the
+# verification link. No API key, no mail infrastructure — the lab "sends" via
+# the local spool and the harness inbox routes it.
+name: frictionlab-email-smoke
+
+target:
+  url: http://127.0.0.1:8742/
+  local_app:
+    command: python3 frictionlab/serve.py --port 8742
+    ready_url: http://127.0.0.1:8742/
+
+task: |
+  Sign up for a FREE NimbusNotes account, verify your email address, and reach
+  the welcome screen.
+
+success:
+  url_matches: "done\\.html"
+  page_text: "You're all set"
+  judge: false
+
+runs: 1
+email_domain: mail.lab.test
+
+agent:
+  driver: scripted
+  max_steps: 60
+  script:
+    - { action: screenshot, reasoning: "NimbusNotes landing page. I'll click 'Get started' to sign up." }
+    - { action: click_selector, selector: "a.btn:has-text('Get started')", pause_s: 1 }
+    - { action: click_selector, selector: "#name", reasoning: "Filling in the signup form with my details." }
+    - { action: type, text: "Sam Verify" }
+    - { action: click_selector, selector: "#email" }
+    - { action: type, text: "{email}" }
+    - { action: click_selector, selector: "#password" }
+    - { action: type, text: "sunshine42!X" }
+    - { action: click_selector, selector: "button:has-text('Create account')", pause_s: 1 }
+    - { action: screenshot, reasoning: "It says a verification link was sent to my address. Let me check my inbox.", pause_s: 2 }
+    - { action: check_email, reasoning: "Checking my email for the verification link." }
+    - { action: open_email_link, reasoning: "Found the verification email — opening the confirmation link.", pause_s: 1 }
+    - { action: scroll, coordinate: [640, 400], scroll_direction: "down", scroll_amount: 5, reasoning: "Email verified — now the workspace setup page. Scrolling to review everything." }
+    - { action: click_selector, selector: "#opt-dpa", reasoning: "Ticking the Data Processing Agreement checkbox at the bottom.", pause_s: 1 }
+    - { action: click_selector, selector: "#perm-continue", pause_s: 1 }
+    - { action: click_selector, selector: ".free-skip a", reasoning: "Choosing the free plan link at the bottom of the pricing page.", pause_s: 1 }
+    - { action: screenshot, reasoning: "The welcome screen — my workspace is ready." }
+    - { final: "DONE: I signed up, verified my email via the link in my inbox, and reached the welcome screen." }
+
+viewport: { width: 1280, height: 800 }
+
+personas:
+  - name: scripted-email-baseline
+    prompt: A deterministic scripted journey validating the email-verification loop.

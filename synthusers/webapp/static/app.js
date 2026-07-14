@@ -189,6 +189,9 @@ async function dashboard() {
     const persona = el("textarea");
     persona.placeholder = "Optional persona — e.g. \"You are a 61-year-old teacher who is " +
       "not confident with technology. You read everything carefully…\"";
+    const emailDomain = Object.assign(el("input"), {
+      type: "text", placeholder: "mail.yourdomain.com — gives each run a receivable inbox",
+    });
     const runs = Object.assign(el("input"), { type: "number", min: 1, max: 50, value: 1 });
     const parallel = Object.assign(el("input"), { type: "number", min: 1, max: 8, value: 1 });
     const maxSteps = Object.assign(el("input"), { type: "number", min: 1, max: 200, value: 25 });
@@ -203,6 +206,7 @@ async function dashboard() {
           body: JSON.stringify({
             url: url.value.trim(), task: task.value.trim(),
             persona: persona.value.trim() || undefined,
+            email_domain: emailDomain.value.trim() || undefined,
             runs: Number(runs.value), parallel: Number(parallel.value),
             max_steps: Number(maxSteps.value), model: model.value,
           }),
@@ -219,7 +223,9 @@ async function dashboard() {
     knobs.append(field("runs", runs), field("parallel", parallel),
                  field("max steps", maxSteps), field("model", model), launch);
     cpanel.append(field("target url", url), field("task", task),
-                  field("persona (optional)", persona), knobs);
+                  field("persona (optional)", persona),
+                  field("email domain (optional — for signup/verification flows)", emailDomain),
+                  knobs);
     $app.append(cpanel);
   }
 

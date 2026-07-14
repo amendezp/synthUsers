@@ -139,6 +139,12 @@ def _e(s) -> str:
 def _fmt_action(action: dict) -> str:
     kind = action.get("action", "?")
     bits = [kind]
+    if kind == "check_email":
+        found = action.get("found")
+        subjects = "; ".join(s for s in action.get("subjects", []) if s)
+        return f"📧 check_email ({found} message(s){': ' + subjects if subjects else ''})"
+    if kind == "open_email_link":
+        return f"📧 open_email_link {action.get('url', '')}".rstrip()
     if action.get("coordinate"):
         bits.append(f"@{tuple(action['coordinate'])}")
     if action.get("start_coordinate"):
