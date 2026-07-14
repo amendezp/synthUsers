@@ -4,6 +4,7 @@
 # verification link. No API key, no mail infrastructure — the lab "sends" via
 # the local spool and the harness inbox routes it.
 name: frictionlab-email-smoke
+hidden: true    # regression fixture — not offered as a dashboard preset card
 
 target:
   url: http://127.0.0.1:8742/

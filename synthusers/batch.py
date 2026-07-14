@@ -65,11 +65,18 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
     persona = spec.persona_for_run(run_index)
     trace = TraceRecorder(run_dir)
 
-    # Each run may draw a random model from the pool — model diversity as a
-    # user-capability proxy. The judge/labeler stay on the base model.
+    # Each run may draw a random model and/or effort from its pool — capability
+    # and deliberation depth as user-diversity proxies. The judge/labeler stay
+    # on the base model.
     agent_cfg = spec.agent
-    if spec.agent.model_pool and spec.agent.driver == "computer_use":
-        agent_cfg = dataclasses.replace(spec.agent, model=random.choice(spec.agent.model_pool))
+    if spec.agent.driver == "computer_use":
+        draws = {}
+        if spec.agent.model_pool:
+            draws["model"] = random.choice(spec.agent.model_pool)
+        if spec.agent.effort_pool:
+            draws["effort"] = random.choice(spec.agent.effort_pool)
+        if draws:
+            agent_cfg = dataclasses.replace(spec.agent, **draws)
 
     task = spec.task
     email = None
@@ -111,6 +118,7 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
         "viewport": spec.viewport,
         "driver": spec.agent.driver,
         "model": agent_cfg.model if spec.agent.driver == "computer_use" else None,
+        "effort": agent_cfg.effort if spec.agent.driver == "computer_use" else None,
         "email": email,
         "stop_reason": result.stop_reason,
         "final_text": result.final_text,
@@ -195,6 +203,7 @@ def aggregate(spec: Spec, batch_dir: pathlib.Path, metas: list[dict]) -> dict:
                 "run_id": m["run_id"],
                 "persona": m["persona"],
                 "model": m.get("model"),
+                "effort": m.get("effort"),
                 "completed": m["verdict"]["completed"],
                 "gave_up": m["verdict"].get("gave_up"),
                 "stop_reason": m["stop_reason"],
