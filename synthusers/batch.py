@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import hashlib
 import json
+import os
 import pathlib
 import random
 import shlex
@@ -168,6 +170,19 @@ def aggregate(spec: Spec, batch_dir: pathlib.Path, metas: list[dict]) -> dict:
 
     all_events = [e for m in metas for e in m.get("friction_events", [])]
     clusters = friction.cluster_events(all_events)
+
+    # Second-pass QC on the findings themselves: verify each cluster against
+    # its evidence and merge duplicates, so the report is neither wrong nor
+    # repetitive. Skipped for keyless/scripted runs; failures keep originals.
+    if clusters and spec.agent.driver == "computer_use" and os.environ.get("ANTHROPIC_API_KEY"):
+        reviewed = friction.review_clusters(
+            clusters, spec.task, spec.target.url, batch_dir,
+            spec.agent.judge_model or spec.agent.model)
+        if reviewed is not None:
+            clusters = reviewed
+    for c in clusters:
+        c["id"] = hashlib.sha1(
+            f"{c['type']}|{c['page']}|{c['title']}".encode()).hexdigest()[:10]
 
     failure_points = {}
     for m in failed:

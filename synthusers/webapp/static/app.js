@@ -392,6 +392,7 @@ function batchView(batchId) {
 
   const runCards = new Map();   // run_id -> card handle
   let batchInfo = { max_steps: 40, planned_runs: null };
+  let reviewState = {};         // cluster id -> "accepted" | "rejected"
 
   function runCard(runId) {
     if (runCards.has(runId)) return runCards.get(runId);
@@ -592,13 +593,40 @@ function batchView(batchId) {
     if (!clusters.length) {
       findingsBox.append(el("p", "notice", "No friction events detected."));
     }
+
+    // Close-the-loop bar: hand the accepted fixes to a coding agent.
+    if (clusters.length) {
+      const bar = el("div", "handoff-bar");
+      const copyBtn = el("button", "primary", "📋 Copy fix plan for a coding agent");
+      copyBtn.onclick = async () => {
+        try {
+          const resp = await fetch(`/api/batches/${batchId}/handoff.md`);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          await navigator.clipboard.writeText(await resp.text());
+          copyBtn.textContent = "Copied — paste it into your coding agent";
+        } catch (e) { copyBtn.textContent = `Copy failed: ${e.message || e}`; }
+        setTimeout(() => copyBtn.textContent = "📋 Copy fix plan for a coding agent", 3000);
+      };
+      bar.append(copyBtn,
+                 Object.assign(el("a", "btn", "Download fixes.md"),
+                               { href: `/api/batches/${batchId}/handoff.md` }),
+                 el("span", "notice", token.get()
+                   ? "Agree/dismiss below to choose what goes in — dismissed and auto-refuted findings are left out."
+                   : "Includes verified findings; enter the admin token on the dashboard to triage."));
+      findingsBox.append(bar);
+    }
+
+    const isRefuted = c => (c.verification || {}).verdict === "refuted";
+    const active = clusters.filter(c => !isRefuted(c));
+    const refuted = clusters.filter(isRefuted);
+
     const TIERS = [
       ["high", "Fix first", "blocking or hit by most users"],
       ["medium", "Should fix", "meaningful drag on the flow"],
       ["low", "Polish", "minor friction"],
     ];
     for (const [tier, label, hint] of TIERS) {
-      const items = clusters.filter(c => (c.priority || "low") === tier);
+      const items = active.filter(c => (c.priority || "low") === tier);
       if (!items.length) continue;
       const head = el("div", "tier-head");
       head.append(el("span", `chip p-${tier}`, label),
@@ -606,9 +634,21 @@ function batchView(batchId) {
       findingsBox.append(head);
       for (const c of items) findingsBox.append(findingCard(c));
     }
+    if (refuted.length) {
+      const details = el("details", "refuted-box");
+      details.append(el("summary", null,
+        `Auto-refuted by the verifier — ${refuted.length} finding(s) whose evidence didn't hold up`));
+      for (const c of refuted) details.append(findingCard(c));
+      findingsBox.append(details);
+    }
 
     function findingCard(c) {
       const box = el("div", "cluster");
+      const applyDecision = () => {
+        box.classList.toggle("accepted", reviewState[c.id] === "accepted");
+        box.classList.toggle("rejected", reviewState[c.id] === "rejected");
+      };
+      applyDecision();
       const cols = el("div", "cluster-cols");
 
       const shot = el("div", "cluster-shot");
@@ -630,9 +670,60 @@ function batchView(batchId) {
       }
 
       const body = el("div", "cluster-body");
-      body.append(el("h3", null, c.title));
-      body.append(el("div", "caps-label",
-        `${(c.runs_affected || []).length} of ${metrics.n_runs} user(s) · ${c.count} event(s)`));
+      const titleRow = el("div", "cluster-title");
+      titleRow.append(el("h3", null, c.title));
+      const v = c.verification;
+      if (v) {
+        const chipCls = { confirmed: "v-confirmed", uncertain: "v-uncertain",
+                          refuted: "v-refuted" }[v.verdict] || "";
+        const label = { confirmed: "✓ verified", uncertain: "? uncertain",
+                        refuted: "✗ refuted" }[v.verdict] || v.verdict;
+        const vc = el("span", `chip ${chipCls}`, label);
+        if (v.reason) vc.title = v.reason;   // the verifier's reasoning on hover
+        titleRow.append(vc);
+      }
+      body.append(titleRow);
+      const subBits = [`${(c.runs_affected || []).length} of ${metrics.n_runs} user(s)`,
+                       `${c.count} event(s)`];
+      if (c.merged_from && c.merged_from.length) {
+        subBits.push(`${c.merged_from.length + 1} reports merged`);
+      }
+      body.append(el("div", "caps-label", subBits.join(" · ")));
+
+      if (token.get() && c.id) {
+        const actions = el("div", "triage");
+        const agree = el("button", "triage-btn agree", "✓ Agree");
+        const dismiss = el("button", "triage-btn dismiss", "✕ Dismiss");
+        const paint = () => {
+          agree.classList.toggle("on", reviewState[c.id] === "accepted");
+          dismiss.classList.toggle("on", reviewState[c.id] === "rejected");
+          applyDecision();
+        };
+        const decide = async (want) => {
+          const next = reviewState[c.id] === want ? "clear" : want;
+          const prev = reviewState[c.id];
+          if (next === "clear") delete reviewState[c.id]; else reviewState[c.id] = next;
+          paint();
+          try {
+            const resp = await fetch(`/api/batches/${batchId}/review`, {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${token.get()}`,
+                         "Content-Type": "application/json" },
+              body: JSON.stringify({ cluster: c.id, decision: next }),
+            });
+            if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+          } catch (e) {
+            if (prev === undefined) delete reviewState[c.id]; else reviewState[c.id] = prev;
+            paint();
+            showError(errBox, `Saving your decision failed: ${e.message || e}`);
+          }
+        };
+        agree.onclick = () => decide("accepted");
+        dismiss.onclick = () => decide("rejected");
+        actions.append(agree, dismiss);
+        paint();
+        body.append(actions);
+      }
       if (c.recommendation) {
         const fix = el("div", "fix");
         fix.append(el("span", "fix-k", "Fix"), el("span", null, c.recommendation));
@@ -664,6 +755,7 @@ function batchView(batchId) {
   }
 
   function applySnapshot(snap) {
+    reviewState = snap.review || {};
     renderHeader(snap.batch);
     runGrid.replaceChildren();
     runCards.clear();
