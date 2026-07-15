@@ -44,28 +44,80 @@ def assertion_verdict(spec: Spec, final_url: str, final_page_text: str) -> Optio
     return {"passed": all(checks.values()), "checks": checks}
 
 
+def _trajectory(steps: list[dict], limit: int = 80) -> str:
+    """Compact narrated step log — the judge's record of what actually
+    happened, not just how the session ended."""
+    lines = []
+    for s in steps[-limit:]:
+        action = s.get("action", {}) or {}
+        desc = action.get("action", "?")
+        if action.get("text"):
+            desc += f" text={str(action['text'])[:60]!r}"
+        line = f"[step {s.get('step')}] {s.get('url', '')} — {desc}"
+        if s.get("error"):
+            line += f" ERROR={str(s['error'])[:100]}"
+        lines.append(line)
+        if s.get("reasoning"):
+            lines.append(f"    user said: {str(s['reasoning'])[:300]}")
+    return "\n".join(lines)
+
+
+def _judge_shots(steps: list[dict], last_n: int = 3, spread_n: int = 5) -> list[dict]:
+    """Last screenshots plus evenly spaced ones across the rest of the run —
+    including the steps just before the final segment, where a success that
+    is no longer on screen at the end typically happened."""
+    shots = [s for s in steps if s.get("screenshot")]
+    if len(shots) <= last_n + spread_n:
+        return shots
+    last = shots[-last_n:]
+    earlier = shots[:-last_n]
+    idx = sorted({round(i * (len(earlier) - 1) / (spread_n - 1)) for i in range(spread_n)})
+    return [earlier[i] for i in idx] + last
+
+
 def judge_verdict(spec: Spec, run_dir: pathlib.Path, meta: dict, steps: list[dict]) -> Optional[dict]:
-    """LLM judge over the final state. Returns None when the API is unavailable."""
+    """LLM judge over the whole run: the narrated trajectory plus screenshots
+    sampled across the session, not just the final frames. Returns None when
+    the API is unavailable."""
     try:
         import anthropic
         client = anthropic.Anthropic()
 
+        criteria = f"{spec.success.url_matches or ''} {spec.success.page_text or ''}".strip()
+        shots = _judge_shots(steps)
         content: list[dict] = [{
             "type": "text",
             "text": (
                 "You are grading a usability-test run performed by a synthetic user.\n\n"
-                f"Task given to the user:\n{spec.task}\n\n"
-                f"Success criteria: {spec.success.url_matches or ''} {spec.success.page_text or ''}\n\n"
-                f"The user's final message: {meta.get('final_text') or '(none)'}\n"
+                f"Task given to the user:\n{spec.task}\n"
+                + (f"\nSuccess criteria: {criteria}\n" if criteria else "")
+                + f"\nThe user's final message: {meta.get('final_text') or '(none)'}\n"
                 f"Final URL: {meta.get('final_url')}\n"
                 f"Run ended because: {meta.get('stop_reason')}\n\n"
-                "Below are the last screenshots of the session. Decide whether the task was "
-                "actually completed (do not take the user's word for it) and, if not, where they failed."
+                "Narrated trajectory of the session (the user's own step-by-step "
+                "commentary — verify claims against the screenshots where possible):\n"
+                f"{_trajectory(steps)}\n\n"
+                f"Below are {len(shots)} screenshots: several sampled across the "
+                "session in order, then the final frames.\n\n"
+                "Decide whether the task's goal was ACTUALLY achieved at any point "
+                "during the run (and not undone) — a run that ended at the step or "
+                "time cap, or without a closing message, may still have completed "
+                "the goal earlier; judge from the trajectory and screenshots, not "
+                "from whether the user declared success. Weigh the evidence like a "
+                "human reviewer watching the recording: if the narrated trajectory "
+                "reports reaching the goal and the sampled screenshots are "
+                "consistent with that account (none contradict it), grade "
+                "completed=true even if the exact success frame is not among the "
+                "samples. Grade completed=false when the narration itself never "
+                "reaches the goal, or the screenshots contradict its claims. Cite "
+                "the specific step numbers or screenshots your verdict rests on in "
+                "`reason`, and if the task was not completed, name where the user "
+                "failed or got stuck."
             ),
         }]
-        shots = [s for s in steps if s.get("screenshot")][-3:]
         for s in shots:
             png = (run_dir / s["screenshot"]).read_bytes()
+            content.append({"type": "text", "text": f"Screenshot at step {s.get('step')}:"})
             content.append({"type": "image", "source": {
                 "type": "base64", "media_type": "image/png",
                 "data": base64.b64encode(png).decode()}})
