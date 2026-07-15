@@ -281,18 +281,39 @@ def run_batch(spec: Spec, headed: bool = False, runs_override: int | None = None
     return batch_dir
 
 
-def regenerate(batch_dir: pathlib.Path) -> pathlib.Path:
-    """Rebuild metrics + report from already-recorded runs."""
+def regenerate(batch_dir: pathlib.Path, rejudge: bool = False) -> pathlib.Path:
+    """Rebuild metrics + report from already-recorded runs. With rejudge=True,
+    re-run the LLM judge over each recorded run first (using the current judge
+    evidence pipeline) and rewrite the stored verdicts — no agents re-run."""
     from .report import generate_report
+
+    spec = None
+    spec_file = batch_dir / "spec.yaml"
+    if spec_file.exists() and spec_file.read_text().strip():
+        from .config import load_spec
+        spec = load_spec(spec_file)
+
     metas = []
     for run_dir in sorted(batch_dir.glob("run_*")):
         meta = read_meta(run_dir)
-        if meta:
-            metas.append(meta)
-    if metas:
-        spec_file = batch_dir / "spec.yaml"
-        if spec_file.exists() and spec_file.read_text().strip():
-            from .config import load_spec
-            spec = load_spec(spec_file)
-            aggregate(spec, batch_dir, metas)
+        if not meta:
+            continue
+        if rejudge:
+            if spec is None:
+                raise RuntimeError("cannot rejudge: no spec.yaml in the batch dir")
+            steps = read_trace(run_dir)
+            judge = verdict.judge_verdict(spec, run_dir, meta, steps)
+            if judge is None:
+                raise RuntimeError("cannot rejudge: judge unavailable "
+                                   "(is ANTHROPIC_API_KEY set?)")
+            old = meta.get("verdict") or {}
+            meta["verdict"] = verdict.combine(old.get("assertion"), judge,
+                                              meta.get("stop_reason", ""))
+            (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+            print(f"  {meta['run_id']}: rejudged -> completed="
+                  f"{meta['verdict']['completed']}"
+                  + (f" (was {old.get('completed')})" if old else ""))
+        metas.append(meta)
+    if metas and spec is not None:
+        aggregate(spec, batch_dir, metas)
     return generate_report(batch_dir)

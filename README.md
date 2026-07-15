@@ -250,8 +250,17 @@ spec.yaml ─► batch runner ─► N sessions (Playwright Chromium, video reco
 ```
 
 - **Verdicts** are two-tier: deterministic assertions (URL/text) win when
-  defined; an LLM judge grades from final screenshots otherwise, and
-  disagreements between the two are surfaced.
+  defined; an LLM judge grades otherwise, and disagreements between the two
+  are surfaced. The judge sees the whole run — the narrated step-by-step
+  trajectory plus screenshots sampled across the session — so a goal reached
+  mid-run still counts even when the run ends at the step cap without a
+  closing message (critical for custom URLs, where the judge is the only
+  tier). Got a verdict you believe is wrong? Re-grade a recorded batch
+  without re-running agents:
+
+  ```bash
+  python3 -m synthusers report runs/<batch_dir> --rejudge
+  ```
 - **Friction heuristics** (no API needed): backtracks (returning to a page
   previously left), rage clicks, wandering (long look-around streaks),
   action errors, hesitation (long deliberation before acting), and

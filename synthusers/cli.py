@@ -25,6 +25,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p_rep = sub.add_parser("report", help="regenerate metrics + report for a batch dir")
     p_rep.add_argument("batch_dir")
+    p_rep.add_argument("--rejudge", action="store_true",
+                       help="re-run the LLM judge over each recorded run (fixes "
+                            "wrong verdicts without re-running agents; needs "
+                            "ANTHROPIC_API_KEY)")
 
     p_lab = sub.add_parser("serve-lab", help="serve the friction-lab demo app")
     p_lab.add_argument("--port", type=int, default=8734)
@@ -45,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "report":
         from .batch import regenerate
-        path = regenerate(pathlib.Path(args.batch_dir))
+        path = regenerate(pathlib.Path(args.batch_dir), rejudge=args.rejudge)
         print(f"Report: {path}")
         return 0
 
