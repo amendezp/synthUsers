@@ -99,9 +99,14 @@ def load_metrics(batch_dir: pathlib.Path) -> dict | None:
                     break
         cluster["thumbs"] = thumbs
         cluster["priority"] = _cluster_priority(cluster, n_runs)
-        cluster["recommendation"] = cluster.get("recommendation") or next(
-            (ex["suggestion"] for ex in cluster.get("examples", [])
-             if ex.get("suggestion")), None)
+        # High bar for fixes: on verified batches the recommendation comes only
+        # from the verifier (set on confirmed findings, absent otherwise) — the
+        # raw per-event suggestions stay evidence, not advice. The fallback is
+        # for batches that never got a verification pass.
+        if "verification" not in cluster:
+            cluster["recommendation"] = cluster.get("recommendation") or next(
+                (ex["suggestion"] for ex in cluster.get("examples", [])
+                 if ex.get("suggestion")), None)
     clusters.sort(key=lambda c: (
         1 if (c.get("verification") or {}).get("verdict") == "refuted" else 0,
         PRIORITY_ORDER[c["priority"]],

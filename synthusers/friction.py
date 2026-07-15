@@ -220,7 +220,7 @@ For EVERY finding, judge it adversarially:
 - verdict "refuted": the evidence does not support the claim, contradicts it, or describes normal expected behavior rather than friction.
 - duplicate_of: if this finding describes the SAME underlying product issue as an earlier finding (even under a different friction type or page), give that finding's index; the earliest/strongest statement of the issue is the canonical one. Otherwise null.
 - title: rewrite as one plain sentence naming the PRODUCT ISSUE (not the friction taxonomy), e.g. "The free-plan link is nearly invisible on the pricing page".
-- recommendation: the single most useful fix, one or two sentences, merging the suggestions if the finding absorbs duplicates.
+- recommendation: ONLY for confirmed findings — one concrete, implementable change that directly addresses the verified evidence (merge the suggestions if the finding absorbs duplicates). For uncertain or refuted findings return an empty string: a fix must never be prescribed on evidence that did not hold up.
 
 Findings:
 {findings}"""
@@ -319,7 +319,10 @@ def review_clusters(clusters: list[dict], task: str, target_url: str,
             out = dict(cluster)
             if row:
                 out["title"] = (row.get("title") or "").strip() or cluster["title"]
-                out["recommendation"] = (row.get("recommendation") or "").strip() or None
+                # High bar for fixes: only a confirmed finding earns one,
+                # regardless of what the model returned.
+                rec = (row.get("recommendation") or "").strip()
+                out["recommendation"] = rec if (row["verdict"] == "confirmed" and rec) else None
                 out["verification"] = {"verdict": row["verdict"],
                                        "reason": row.get("reason", "")}
             merged[i] = out
