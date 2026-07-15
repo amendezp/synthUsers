@@ -180,6 +180,154 @@ def llm_label_run(run_id: str, steps: list[dict], task: str, model: str) -> Opti
         return None
 
 
+# -- verification pass ------------------------------------------------------
+
+VERIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "findings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "verdict": {"type": "string",
+                                "enum": ["confirmed", "uncertain", "refuted"]},
+                    "reason": {"type": "string"},
+                    "duplicate_of": {"type": ["integer", "null"]},
+                    "title": {"type": "string"},
+                    "recommendation": {"type": "string"},
+                },
+                "required": ["index", "verdict", "reason", "duplicate_of",
+                             "title", "recommendation"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["findings"],
+    "additionalProperties": False,
+}
+
+VERIFY_PROMPT = """You are a skeptical UX-research reviewer doing quality control on the findings of a usability study before they reach the product team. The study: synthetic users attempted this task on {url}:
+
+{task}
+
+Below are the draft findings, each with its verbatim evidence (quotes from the users' think-aloud commentary) — followed by screenshots of the moments in question, in the same order.
+
+For EVERY finding, judge it adversarially:
+- verdict "confirmed": the quoted evidence (and screenshot, where given) genuinely supports the claim.
+- verdict "uncertain": plausible, but the evidence is thin, one-off, or could be the persona's disposition rather than a flaw in the interface.
+- verdict "refuted": the evidence does not support the claim, contradicts it, or describes normal expected behavior rather than friction.
+- duplicate_of: if this finding describes the SAME underlying product issue as an earlier finding (even under a different friction type or page), give that finding's index; the earliest/strongest statement of the issue is the canonical one. Otherwise null.
+- title: rewrite as one plain sentence naming the PRODUCT ISSUE (not the friction taxonomy), e.g. "The free-plan link is nearly invisible on the pricing page".
+- recommendation: the single most useful fix, one or two sentences, merging the suggestions if the finding absorbs duplicates.
+
+Findings:
+{findings}"""
+
+
+def _verify_findings_text(clusters: list[dict]) -> str:
+    parts = []
+    for i, c in enumerate(clusters):
+        lines = [f"[{i}] type={c['type']} page={c['page']} "
+                 f"users_affected={len(c.get('runs_affected', []))} events={c['count']}"]
+        for ex in c.get("examples", [])[:4]:
+            what = ex.get("evidence") or ex.get("detail") or ""
+            lines.append(f'    - {ex.get("run")} step {ex.get("step")}'
+                         + (f' [{ex["ui_element"]}]' if ex.get("ui_element") else "")
+                         + f': "{what[:300]}"')
+            if ex.get("suggestion"):
+                lines.append(f"      suggested fix: {ex['suggestion'][:200]}")
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts)
+
+
+def _cluster_shot(cluster: dict, batch_dir) -> Optional[bytes]:
+    for ex in cluster.get("examples", []):
+        run, step = ex.get("run"), ex.get("step")
+        if run is None or step is None:
+            continue
+        for name in (f"{step:03d}_after.png", f"{step:03d}_annotated.png"):
+            p = batch_dir / run / "shots" / name
+            if p.exists():
+                return p.read_bytes()
+    return None
+
+
+def review_clusters(clusters: list[dict], task: str, target_url: str,
+                    batch_dir, model: str) -> Optional[list[dict]]:
+    """Adversarial second pass over the batch findings: verify each cluster
+    against its own evidence (+ a screenshot of the moment), refute what does
+    not hold up, and merge findings that describe the same underlying issue —
+    so the report is neither wrong nor repetitive. Returns the revised list,
+    or None when the API is unavailable (callers keep the originals)."""
+    if not clusters:
+        return clusters
+    try:
+        import base64
+
+        import anthropic
+        client = anthropic.Anthropic()
+
+        content: list[dict] = [{"type": "text", "text": VERIFY_PROMPT.format(
+            url=target_url, task=task.strip(),
+            findings=_verify_findings_text(clusters))}]
+        for i, c in enumerate(clusters[:8]):   # cap image payload
+            png = _cluster_shot(c, batch_dir)
+            if png:
+                content.append({"type": "text", "text": f"Screenshot for finding [{i}]:"})
+                content.append({"type": "image", "source": {
+                    "type": "base64", "media_type": "image/png",
+                    "data": base64.b64encode(png).decode()}})
+
+        response = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            output_config={"format": {"type": "json_schema", "schema": VERIFY_SCHEMA}},
+            messages=[{"role": "user", "content": content}],
+        )
+        if response.stop_reason == "refusal":
+            return None
+        rows = {r["index"]: r
+                for r in json.loads(next(b.text for b in response.content
+                                         if b.type == "text"))["findings"]
+                if 0 <= r.get("index", -1) < len(clusters)}
+
+        # Resolve duplicate chains to a canonical, non-self target.
+        def canon(i: int, seen=None) -> int:
+            seen = seen or set()
+            dup = rows.get(i, {}).get("duplicate_of")
+            if dup is None or dup == i or dup in seen or dup not in rows:
+                return i
+            return canon(dup, seen | {i})
+
+        merged: dict[int, dict] = {}
+        for i, cluster in enumerate(clusters):
+            row = rows.get(i)
+            target = canon(i)
+            if row and target != i:                      # fold into canonical
+                dst = merged.get(target)
+                if dst is not None:
+                    dst["count"] += cluster["count"]
+                    dst["runs_affected"] = sorted(set(dst["runs_affected"])
+                                                  | set(cluster["runs_affected"]))
+                    dst["examples"] = (dst["examples"] + cluster["examples"])[:6]
+                    dst.setdefault("merged_from", []).append(cluster["title"])
+                    continue
+                # canonical not materialized yet (forward reference): fall through
+                # and keep this cluster standalone rather than lose it.
+            out = dict(cluster)
+            if row:
+                out["title"] = (row.get("title") or "").strip() or cluster["title"]
+                out["recommendation"] = (row.get("recommendation") or "").strip() or None
+                out["verification"] = {"verdict": row["verdict"],
+                                       "reason": row.get("reason", "")}
+            merged[i] = out
+        return list(merged.values())
+    except Exception:
+        return None
+
+
 # -- batch clustering -------------------------------------------------------
 
 def cluster_events(all_events: list[dict]) -> list[dict]:

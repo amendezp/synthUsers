@@ -265,6 +265,34 @@ tr:hover td { background: rgba(255, 255, 255, 0.03); }
 td a { color: var(--text-primary); text-decoration: none; font-weight: 500; }
 td a:hover { text-decoration: underline; }
 
+/* findings: verification verdicts + human triage + agent handoff */
+.chip.v-confirmed { background: var(--good-bg); border-color: var(--good-bd); color: var(--good-tx); }
+.chip.v-uncertain { background: var(--warn-bg); border-color: var(--warn-bd); color: var(--warn-tx); }
+.chip.v-refuted { background: var(--bad-bg); border-color: var(--bad-bd); color: var(--bad-tx); }
+.cluster-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cluster.accepted { border-color: var(--good-bd); box-shadow: 0 0 0 1px var(--good-bd); }
+.cluster.rejected { opacity: 0.45; }
+.cluster.rejected h3 { text-decoration: line-through; }
+.triage { display: flex; gap: 8px; margin: 10px 0 2px; }
+.triage-btn { padding: 5px 14px; font-size: 12.5px; }
+/* solid backgrounds: the on-state must stay readable over light screenshots */
+.triage-btn.agree.on { background: rgba(34, 84, 55, 0.92); border-color: var(--good-bd); color: var(--good-tx); }
+.triage-btn.dismiss.on { background: rgba(96, 36, 32, 0.92); border-color: var(--bad-bd); color: var(--bad-tx); }
+.handoff-bar {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+  padding: 14px 16px; margin: 14px 0 20px;
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+}
+.handoff-bar .notice { font-size: 12.5px; }
+.refuted-box { margin-top: 22px; }
+.refuted-box summary {
+  cursor: pointer; color: var(--text-secondary); font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.15em; font-weight: 600;
+  margin-bottom: 10px;
+}
+
 /* batch view: friction findings, grouped by priority tier */
 .tier-head { display: flex; align-items: center; gap: 12px; margin: 26px 0 12px; }
 .chip.p-high { background: var(--bad-bg); border-color: var(--bad-bd); color: var(--bad-tx); }

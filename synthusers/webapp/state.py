@@ -99,13 +99,20 @@ def load_metrics(batch_dir: pathlib.Path) -> dict | None:
                     break
         cluster["thumbs"] = thumbs
         cluster["priority"] = _cluster_priority(cluster, n_runs)
-        cluster["recommendation"] = next(
+        cluster["recommendation"] = cluster.get("recommendation") or next(
             (ex["suggestion"] for ex in cluster.get("examples", [])
              if ex.get("suggestion")), None)
-    clusters.sort(key=lambda c: (PRIORITY_ORDER[c["priority"]],
-                                 -len(c.get("runs_affected", [])),
-                                 -(c.get("count") or 0)))
+    clusters.sort(key=lambda c: (
+        1 if (c.get("verification") or {}).get("verdict") == "refuted" else 0,
+        PRIORITY_ORDER[c["priority"]],
+        -len(c.get("runs_affected", [])),
+        -(c.get("count") or 0)))
     return metrics
+
+
+def load_review(batch_dir: pathlib.Path) -> dict:
+    """Human triage of the findings: {cluster_id: "accepted"|"rejected"}."""
+    return _read_json(batch_dir / "review.json").get("decisions", {})
 
 
 def _launch_info(batch_dir: pathlib.Path) -> dict:
@@ -312,4 +319,5 @@ def build_snapshot(batch_dir: pathlib.Path, registry: dict[str, dict]) -> dict:
         },
         "runs": runs,
         "metrics": metrics,
+        "review": load_review(batch_dir),
     }

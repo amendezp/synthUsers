@@ -15,6 +15,7 @@ import pathlib
 import re
 import secrets
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -23,9 +24,10 @@ import yaml
 
 from .. import inbox
 from ..config import load_spec
-from . import runner, state
+from . import handoff, runner, state
 
 STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
+_REVIEW_LOCK = threading.Lock()   # serialize read-modify-write of review.json
 SSE_POLL_S = 0.4
 SSE_HEARTBEAT_S = 15.0
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)$")
@@ -118,6 +120,21 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, state.list_batches(self._roots(), runner.registry))
         elif path.startswith("/api/batches/") and path.endswith("/events"):
             self._sse(path[len("/api/batches/"):-len("/events")])
+        elif path.startswith("/api/batches/") and path.endswith("/handoff.md"):
+            batch_dir = state.resolve_batch_dir(
+                path[len("/api/batches/"):-len("/handoff.md")], self._roots())
+            doc = handoff.build(batch_dir) if batch_dir else None
+            if doc is None:
+                self._json(404, {"error": "no metrics for this batch yet"})
+            else:
+                data = doc.encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                self.send_header("Content-Disposition",
+                                 f'attachment; filename="{batch_dir.name}-fixes.md"')
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
         elif path.startswith("/api/batches/"):
             batch_dir = state.resolve_batch_dir(path[len("/api/batches/"):], self._roots())
             if batch_dir is None:
@@ -131,7 +148,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route_post(self):
         path = urlparse(self.path).path
-        if path not in ("/api/batches", "/api/inbound-email"):
+        review_batch = None
+        if path.startswith("/api/batches/") and path.endswith("/review"):
+            review_batch = path[len("/api/batches/"):-len("/review")]
+        elif path not in ("/api/batches", "/api/inbound-email"):
             self._json(404, {"error": "not found"})
             return
         if not self._authorized():
@@ -142,6 +162,10 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or b"{}")
         except Exception:
             self._json(400, {"error": "invalid JSON body"})
+            return
+
+        if review_batch is not None:
+            self._review(review_batch, body)
             return
 
         if path == "/api/inbound-email":
@@ -159,6 +183,31 @@ class Handler(BaseHTTPRequestHandler):
             self._json(e.status, {"error": e.message})
 
     # -- endpoints ----------------------------------------------------------
+
+    def _review(self, batch_id: str, body: dict) -> None:
+        """Persist a human agree/disagree on a finding: review.json in the
+        batch dir maps cluster id -> accepted | rejected."""
+        batch_dir = state.resolve_batch_dir(batch_id, self._roots())
+        if batch_dir is None:
+            self._json(404, {"error": "unknown batch"})
+            return
+        cluster = str(body.get("cluster") or "")
+        decision = str(body.get("decision") or "")
+        if not cluster or decision not in ("accepted", "rejected", "clear"):
+            self._json(400, {"error": 'need {"cluster": id, "decision": '
+                                      '"accepted"|"rejected"|"clear"}'})
+            return
+        with _REVIEW_LOCK:
+            decisions = state.load_review(batch_dir)
+            if decision == "clear":
+                decisions.pop(cluster, None)
+            else:
+                decisions[cluster] = decision
+            (batch_dir / "review.json").write_text(json.dumps({
+                "decisions": decisions,
+                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }, indent=2))
+        self._json(200, {"decisions": decisions})
 
     def _api_specs(self) -> list[dict]:
         specs = []

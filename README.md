@@ -258,6 +258,29 @@ spec.yaml ─► batch runner ─► N sessions (Playwright Chromium, video reco
   self-reported confusion in the agent's commentary.
 - **LLM labeling** (live runs): a pass over each trace that names the UI
   element involved, quotes the evidence, and suggests a fix.
+- **Findings QC** (live runs): before anything reaches the report, an
+  adversarial verifier re-examines every finding against its own evidence and
+  a screenshot of the moment — findings whose evidence doesn't hold up are
+  marked **refuted** (shown, but set aside), thin ones **uncertain**, and
+  findings describing the same underlying issue are **merged** so the report
+  never repeats itself. Re-running `synthusers report <batch_dir>` applies
+  this to old batches too.
+
+## Closing the loop
+
+Findings aren't the end product — fixed interfaces are:
+
+1. **Triage in the dashboard**: each finding card has **✓ Agree / ✕ Dismiss**
+   (admin token required; decisions persist in the batch's `review.json`).
+2. **Hand the fixes to a coding agent**: *Copy fix plan for a coding agent*
+   (or download `fixes.md`, also at `GET /api/batches/<id>/handoff.md`) builds
+   an implementation-ready document from what you accepted — per issue: where,
+   verbatim user evidence, the fix, and an acceptance criterion. Dismissed and
+   auto-refuted findings stay out; untriaged verified ones ride along and are
+   flagged as such. Paste it straight into Claude Code (or any coding agent)
+   against your codebase.
+3. **Verify the fixes**: re-run the same batch and compare — the accepted
+   issues should stop recurring and the success rate should hold or improve.
 
 ## Friction lab
 
