@@ -726,7 +726,9 @@ function batchView(batchId) {
       }
       if (c.recommendation) {
         const fix = el("div", "fix");
-        fix.append(el("span", "fix-k", "Fix"), el("span", null, c.recommendation));
+        // a fix is only ever attached to a finding whose evidence held up
+        fix.append(el("span", "fix-k", c.verification ? "Verified fix" : "Fix"),
+                   el("span", null, c.recommendation));
         body.append(fix);
       }
       const examples = (c.examples || []).slice(0, 4);

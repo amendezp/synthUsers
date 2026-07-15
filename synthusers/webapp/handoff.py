@@ -104,7 +104,13 @@ def build(batch_dir: pathlib.Path) -> str | None:
             who = persona_of.get(ex.get("run")) or ex.get("run") or "user"
             lines.append(f'  - {who}, step {ex.get("step")}: "{quote}"')
         if c.get("recommendation"):
-            lines += [f"- **Fix:** {c['recommendation']}"]
+            label = "Fix (verified)" if c.get("verification") else "Fix"
+            lines += [f"- **{label}:** {c['recommendation']}"]
+        else:
+            lines += ["- **Fix:** none prescribed — the evidence was not "
+                      "conclusive enough to verify a specific change. Reproduce "
+                      "the moment described above first; only implement a change "
+                      "you can justify from that evidence."]
         lines += [
             f"- **Acceptance criterion:** re-running the same task, a user on "
             f"`{c.get('page', 'the affected page')}` completes this moment without "

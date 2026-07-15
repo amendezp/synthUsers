@@ -263,8 +263,10 @@ spec.yaml ─► batch runner ─► N sessions (Playwright Chromium, video reco
   a screenshot of the moment — findings whose evidence doesn't hold up are
   marked **refuted** (shown, but set aside), thin ones **uncertain**, and
   findings describing the same underlying issue are **merged** so the report
-  never repeats itself. Re-running `synthusers report <batch_dir>` applies
-  this to old batches too.
+  never repeats itself. Suggested fixes hold to the same bar: only a
+  **confirmed** finding carries one — uncertain findings present their
+  evidence without prescribing a change. Re-running
+  `synthusers report <batch_dir>` applies this to old batches too.
 
 ## Closing the loop
 
