@@ -22,6 +22,13 @@ from .trace import TraceRecorder
 
 DONE_MARKER = "DONE:"
 GAVE_UP_MARKER = "GAVE_UP:"
+CANCEL_FILE = "cancel.requested"   # dropped into the batch dir to stop it
+
+
+def _cancelled(trace: "TraceRecorder") -> bool:
+    """Cooperative stop: anyone (dashboard, CLI, a plain `touch`) can drop the
+    cancel file into the batch dir; agents notice at their next step."""
+    return (trace.run_dir.parent / CANCEL_FILE).exists()
 
 SYSTEM_TEMPLATE = """You are participating in a usability test as a synthetic user. You control a web browser through the computer tool and must attempt the task below exactly as a real person would.
 
@@ -40,7 +47,7 @@ DEFAULT_PERSONA_BLOCK = "Persona: a typical first-time visitor with average tech
 
 @dataclasses.dataclass
 class RunResult:
-    stop_reason: str            # agent_done | agent_gave_up | max_steps | timeout | refusal | error
+    stop_reason: str            # agent_done | agent_gave_up | max_steps | timeout | refusal | error | cancelled
     final_text: str = ""
     steps: int = 0
     duration_s: float = 0.0
@@ -176,6 +183,8 @@ class ComputerUseAgent:
 
         steps = 0
         while True:
+            if _cancelled(trace):
+                return self._finish("cancelled", "", steps, start)
             if steps >= self.cfg.max_steps:
                 return self._finish("max_steps", "", steps, start)
             if time.monotonic() > deadline:
@@ -347,6 +356,9 @@ class ScriptedAgent:
         steps = 0
 
         for entry in self.script:
+            if _cancelled(trace):
+                return RunResult(stop_reason="cancelled", steps=steps,
+                                 duration_s=time.monotonic() - start)
             entry = dict(entry)
             reasoning = entry.pop("reasoning", "")
             # pause_s is simulated think-time: recorded as deliberation latency in

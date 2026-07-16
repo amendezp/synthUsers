@@ -266,6 +266,9 @@ td a { color: var(--text-primary); text-decoration: none; font-weight: 500; }
 td a:hover { text-decoration: underline; }
 
 /* findings: verification verdicts + human triage + agent handoff */
+.chip.cancelled { background: var(--warn-bg); border-color: var(--warn-bd); color: var(--warn-tx); }
+.stop-btn { border-color: var(--bad-bd); color: var(--bad-tx); background: var(--bad-bg); }
+.stop-btn:hover { background: rgba(255, 160, 150, 0.28); border-color: var(--bad-bd); }
 .chip.v-confirmed { background: var(--good-bg); border-color: var(--good-bd); color: var(--good-tx); }
 .chip.v-uncertain { background: var(--warn-bg); border-color: var(--warn-bd); color: var(--warn-tx); }
 .chip.v-refuted { background: var(--bad-bg); border-color: var(--bad-bd); color: var(--bad-tx); }

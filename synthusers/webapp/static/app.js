@@ -145,7 +145,7 @@ async function dashboard() {
   const runs = Object.assign(el("input"), { type: "number", min: 1, max: 50, value: 3 });
 
   const parallel = Object.assign(el("input"), { type: "number", min: 1, max: 8, value: 2 });
-  const maxSteps = Object.assign(el("input"), { type: "number", min: 1, max: 200, value: 25 });
+  const maxSteps = Object.assign(el("input"), { type: "number", min: 1, max: 200, value: 100 });
   const emailDomain = Object.assign(el("input"), {
     type: "text",
     placeholder: config.email_domain
@@ -517,7 +517,8 @@ function batchView(batchId) {
     card.finished = true;
     const meta = payload.meta || {};
     const verdict = meta.verdict || {};
-    const status = verdict.completed === true ? "completed"
+    const status = meta.stop_reason === "cancelled" ? "cancelled"
+      : verdict.completed === true ? "completed"
       : verdict.gave_up ? "gaveup"
       : verdict.completed === false ? "failed" : "done";
     card.setStatus(status);
@@ -545,6 +546,26 @@ function batchView(batchId) {
     const title = el("h2", null, batch.spec_name);
     bar.append(title, chip(batch.status));
     if (batch.status === "running") bar.append(el("span", "status-dot"));
+    if (token.get() && ["running", "starting"].includes(batch.status)) {
+      const stop = el("button", "stop-btn", "■ Stop batch");
+      stop.onclick = async () => {
+        stop.disabled = true;
+        stop.textContent = "Stopping…";
+        try {
+          const resp = await fetch(`/api/batches/${batchId}/stop`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token.get()}` },
+          });
+          if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+          stop.textContent = "Stopping — runs wind down at their next step";
+        } catch (e) {
+          showError(errBox, `Stop failed: ${e.message || e}`);
+          stop.disabled = false;
+          stop.textContent = "■ Stop batch";
+        }
+      };
+      bar.append(el("span", "spacer"), stop);
+    }
     header.append(bar);
     header.append(el("div", "sub",
       `${batch.id} · started ${fmtWhen(batch.created_at)}` +

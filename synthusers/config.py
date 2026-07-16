@@ -47,8 +47,8 @@ class AgentConfig:
     judge_model: Optional[str] = None   # defaults to `model` (never the pool)
     effort: str = "high"
     effort_pool: Optional[list] = None  # each run draws a random effort from here
-    max_steps: int = 40
-    max_minutes: float = 12.0
+    max_steps: int = 100
+    max_minutes: float = 30.0           # sized so max_steps is the real cap
     keep_last_images: Optional[int] = None  # None = keep full screenshot history
     script: Optional[list] = None       # for driver=scripted: list of action dicts
 
