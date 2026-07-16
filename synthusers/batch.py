@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 import yaml
 from playwright.sync_api import sync_playwright
 
+from . import agent as agent_mod
 from . import friction, inbox, verdict
 from .agent import make_agent
 from .browser import finalize_video, launch_browser, new_session
@@ -60,7 +61,12 @@ class LocalAppServer:
                 self.proc.kill()
 
 
-def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool = False) -> dict:
+def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path,
+               headed: bool = False) -> dict | None:
+    # A cancelled batch starts no new runs (in-flight ones stop themselves
+    # at their next step and still produce a meta).
+    if (batch_dir / agent_mod.CANCEL_FILE).exists():
+        return None
     run_id = f"run_{run_index:03d}"
     run_dir = batch_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -132,14 +138,18 @@ def run_single(spec: Spec, run_index: int, batch_dir: pathlib.Path, headed: bool
         "video": "video.webm" if video_path else None,
     }
 
+    # A cancelled run keeps its artifacts but skips the paid analysis passes —
+    # the user asked it to stop, not to spend more.
+    cancelled = result.stop_reason == "cancelled"
+
     assertion = verdict.assertion_verdict(spec, final_url, final_text_page)
     judge = None
-    if spec.success.judge and spec.agent.driver == "computer_use":
+    if spec.success.judge and spec.agent.driver == "computer_use" and not cancelled:
         judge = verdict.judge_verdict(spec, run_dir, meta, steps)
     meta["verdict"] = verdict.combine(assertion, judge, result.stop_reason)
 
     events = friction.heuristic_events(run_id, steps)
-    if spec.agent.driver == "computer_use":
+    if spec.agent.driver == "computer_use" and not cancelled:
         labeled = friction.llm_label_run(run_id, steps, spec.task,
                                          spec.agent.judge_model or spec.agent.model)
         if labeled:
@@ -270,6 +280,7 @@ def run_batch(spec: Spec, headed: bool = False, runs_override: int | None = None
                     lambda i: run_single(spec, i, batch_dir, headed), range(n_runs)))
         else:
             metas = [run_single(spec, i, batch_dir, headed) for i in range(n_runs)]
+    metas = [m for m in metas if m]   # runs skipped by cancellation
 
     metrics = aggregate(spec, batch_dir, metas)
 

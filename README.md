@@ -60,6 +60,12 @@ Preset studies (the friction lab) and past sessions sit below the fold.
   dashboard too — all state derives from the `runs/` directory.
 - One batch runs at a time (the demo app's port is fixed per spec); the API
   returns 409 while one is in flight.
+- **Stopping a batch**: the batch page has a *Stop batch* button (admin
+  token). Cancellation is cooperative — a `cancel.requested` flag file lands
+  in the batch dir, in-flight runs stop at their next step (marked
+  `cancelled`), unstarted runs are skipped, and metrics/report are built from
+  whatever finished. CLI batches stop the same way:
+  `touch runs/<batch_dir>/cancel.requested`.
 - Specs marked `hidden: true` (test fixtures) stay out of the preset cards.
 
 ### Deploy (Railway / Fly / Render / any Docker host)

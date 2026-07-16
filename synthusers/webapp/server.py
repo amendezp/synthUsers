@@ -148,9 +148,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route_post(self):
         path = urlparse(self.path).path
-        review_batch = None
+        review_batch = stop_batch = None
         if path.startswith("/api/batches/") and path.endswith("/review"):
             review_batch = path[len("/api/batches/"):-len("/review")]
+        elif path.startswith("/api/batches/") and path.endswith("/stop"):
+            stop_batch = path[len("/api/batches/"):-len("/stop")]
         elif path not in ("/api/batches", "/api/inbound-email"):
             self._json(404, {"error": "not found"})
             return
@@ -166,6 +168,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if review_batch is not None:
             self._review(review_batch, body)
+            return
+        if stop_batch is not None:
+            self._stop(stop_batch)
             return
 
         if path == "/api/inbound-email":
@@ -183,6 +188,22 @@ class Handler(BaseHTTPRequestHandler):
             self._json(e.status, {"error": e.message})
 
     # -- endpoints ----------------------------------------------------------
+
+    def _stop(self, batch_id: str) -> None:
+        """Cooperative cancel: drop the flag file into the batch dir. Agents
+        stop at their next step; runs not yet started are skipped. Works for
+        CLI-launched batches too (same file, same effect)."""
+        batch_dir = state.resolve_batch_dir(batch_id, self._roots())
+        if batch_dir is None:
+            self._json(404, {"error": "unknown batch"})
+            return
+        if (batch_dir / "metrics.json").exists():
+            self._json(409, {"error": "batch already finished"})
+            return
+        from ..agent import CANCEL_FILE
+        (batch_dir / CANCEL_FILE).write_text(
+            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        self._json(200, {"stopping": True})
 
     def _review(self, batch_id: str, body: dict) -> None:
         """Persist a human agree/disagree on a finding: review.json in the
