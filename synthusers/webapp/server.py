@@ -28,6 +28,45 @@ from . import handoff, runner, state
 
 STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
 _REVIEW_LOCK = threading.Lock()   # serialize read-modify-write of review.json
+ORPHAN_SWEEP_INTERVAL_S = 300
+
+
+def _finalize_orphan(batch_dir: pathlib.Path) -> None:
+    """Close out a batch whose worker died: synthesize meta for trace-only
+    runs, then rebuild metrics + report so it reaches a terminal state."""
+    from ..batch import regenerate, synthesize_orphan_metas
+    try:
+        synthesize_orphan_metas(batch_dir)
+        regenerate(batch_dir)
+        print(f"finalized orphaned batch {batch_dir.name}")
+    except Exception as e:
+        print(f"failed to finalize {batch_dir.name}: {type(e).__name__}: {e}",
+              file=sys.stderr)
+
+
+def _orphan_sweeper() -> None:
+    """Deploy restarts kill batch workers mid-run, leaving batches stuck
+    without metrics forever. Sweep at boot and periodically: any batch that
+    has runs but no metrics, no live worker in this process, and quiet traces
+    gets finalized from what was recorded."""
+    while True:
+        try:
+            for root in state.scan_roots(pathlib.Path("specs")):
+                if not root.is_dir():
+                    continue
+                for batch_dir in root.iterdir():
+                    if not batch_dir.is_dir() or (batch_dir / "metrics.json").exists():
+                        continue
+                    if not any(batch_dir.glob("run_*/trace.jsonl")):
+                        continue
+                    reg_state = (runner.registry.get(batch_dir.name) or {}).get("state")
+                    if reg_state in ("starting", "running"):
+                        continue
+                    if state.batch_status(batch_dir, reg_state) == "stale":
+                        _finalize_orphan(batch_dir)
+        except Exception:
+            pass
+        time.sleep(ORPHAN_SWEEP_INTERVAL_S)
 SSE_POLL_S = 0.4
 SSE_HEARTBEAT_S = 15.0
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)$")
@@ -192,7 +231,9 @@ class Handler(BaseHTTPRequestHandler):
     def _stop(self, batch_id: str) -> None:
         """Cooperative cancel: drop the flag file into the batch dir. Agents
         stop at their next step; runs not yet started are skipped. Works for
-        CLI-launched batches too (same file, same effect)."""
+        CLI-launched batches too (same file, same effect). A batch whose
+        worker is already gone (deploy restart, crash) has nobody left to
+        write metrics — finalize it here instead."""
         batch_dir = state.resolve_batch_dir(batch_id, self._roots())
         if batch_dir is None:
             self._json(404, {"error": "unknown batch"})
@@ -203,7 +244,13 @@ class Handler(BaseHTTPRequestHandler):
         from ..agent import CANCEL_FILE
         (batch_dir / CANCEL_FILE).write_text(
             time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
-        self._json(200, {"stopping": True})
+        reg_state = (runner.registry.get(batch_id) or {}).get("state")
+        orphaned = (reg_state not in ("starting", "running")
+                    and state.batch_status(batch_dir, reg_state) == "stale")
+        if orphaned:
+            threading.Thread(target=_finalize_orphan, args=(batch_dir,),
+                             name=f"finalize-{batch_id}", daemon=True).start()
+        self._json(200, {"stopping": True, "finalizing": orphaned})
 
     def _review(self, batch_id: str, body: dict) -> None:
         """Persist a human agree/disagree on a finding: review.json in the
@@ -401,6 +448,8 @@ def serve(host: str = "127.0.0.1", port: int = 8700, root: str | None = None) ->
     _admin_token = os.environ.get("SYNTHUSERS_ADMIN_TOKEN") or secrets.token_urlsafe(24)
     if not os.environ.get("SYNTHUSERS_ADMIN_TOKEN"):
         print(f"Admin token: {_admin_token}  (set SYNTHUSERS_ADMIN_TOKEN to pin)")
+
+    threading.Thread(target=_orphan_sweeper, name="orphan-sweeper", daemon=True).start()
 
     httpd = ThreadingHTTPServer((host, port), Handler)
     httpd.daemon_threads = True

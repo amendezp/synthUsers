@@ -292,6 +292,54 @@ def run_batch(spec: Spec, headed: bool = False, runs_override: int | None = None
     return batch_dir
 
 
+def synthesize_orphan_metas(batch_dir: pathlib.Path) -> int:
+    """Close out runs whose worker died mid-flight (deploy restart, crash):
+    any run with a trace but no meta.json gets one synthesized from the
+    recorded steps, so the batch can reach a terminal state. Returns how many
+    runs were closed out."""
+    from .config import load_spec
+
+    spec = None
+    spec_file = batch_dir / "spec.yaml"
+    if spec_file.exists() and spec_file.read_text().strip():
+        spec = load_spec(spec_file)
+
+    closed = 0
+    for run_dir in sorted(batch_dir.glob("run_*")):
+        if (run_dir / "meta.json").exists() or not (run_dir / "trace.jsonl").exists():
+            continue
+        steps = read_trace(run_dir)
+        if not steps:
+            continue
+        run_index = int(run_dir.name.split("_")[-1])
+        persona = spec.persona_for_run(run_index) if spec else None
+        ts = [s.get("ts") for s in steps if s.get("ts")]
+        meta = {
+            "run_id": run_dir.name,
+            "persona": persona.name if persona else None,
+            "viewport": spec.viewport if spec else None,
+            "driver": spec.agent.driver if spec else None,
+            "model": None,   # per-run draw is unknowable after the fact
+            "effort": None,
+            "email": None,
+            "stop_reason": "orphaned",
+            "final_text": "",
+            "final_url": steps[-1].get("url", ""),
+            "steps": steps[-1].get("step", len(steps) - 1),
+            "duration_s": round(max(ts) - min(ts), 1) if len(ts) > 1 else 0.0,
+            "usage": {},
+            "error": "run was interrupted before finishing (server restart or crash)",
+            "video": "video.webm" if (run_dir / "video.webm").exists() else None,
+            "verdict": {"completed": None, "source": "none", "assertion": None,
+                        "judge": None, "disagreement": None, "gave_up": False},
+            "friction_events": friction.heuristic_events(run_dir.name, steps),
+        }
+        (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+        closed += 1
+        print(f"  {run_dir.name}: closed out as orphaned ({meta['steps']} recorded step(s))")
+    return closed
+
+
 def regenerate(batch_dir: pathlib.Path, rejudge: bool = False) -> pathlib.Path:
     """Rebuild metrics + report from already-recorded runs. With rejudge=True,
     re-run the LLM judge over each recorded run first (using the current judge

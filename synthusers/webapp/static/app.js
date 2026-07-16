@@ -15,7 +15,7 @@ function el(tag, cls, text) {
 }
 
 function chip(status) {
-  const label = { gaveup: "gave up" }[status] || status;
+  const label = { gaveup: "gave up", orphaned: "interrupted" }[status] || status;
   return el("span", `chip ${status}`, label);
 }
 
@@ -518,6 +518,7 @@ function batchView(batchId) {
     const meta = payload.meta || {};
     const verdict = meta.verdict || {};
     const status = meta.stop_reason === "cancelled" ? "cancelled"
+      : meta.stop_reason === "orphaned" ? "orphaned"
       : verdict.completed === true ? "completed"
       : verdict.gave_up ? "gaveup"
       : verdict.completed === false ? "failed" : "done";
@@ -546,22 +547,30 @@ function batchView(batchId) {
     const title = el("h2", null, batch.spec_name);
     bar.append(title, chip(batch.status));
     if (batch.status === "running") bar.append(el("span", "status-dot"));
-    if (token.get() && ["running", "starting"].includes(batch.status)) {
-      const stop = el("button", "stop-btn", "■ Stop batch");
+    if (token.get() && ["running", "starting", "stale"].includes(batch.status)) {
+      const stale = batch.status === "stale";
+      const label = stale ? "Finalize stuck batch" : "■ Stop batch";
+      const stop = el("button", "stop-btn", label);
       stop.onclick = async () => {
         stop.disabled = true;
-        stop.textContent = "Stopping…";
+        stop.textContent = stale ? "Finalizing…" : "Stopping…";
         try {
           const resp = await fetch(`/api/batches/${batchId}/stop`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token.get()}` },
           });
-          if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
-          stop.textContent = "Stopping — runs wind down at their next step";
+          const body = await resp.json();
+          if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+          if (body.finalizing) {
+            stop.textContent = "Finalizing from recorded runs…";
+            setTimeout(() => location.reload(), 4000);
+          } else {
+            stop.textContent = "Stopping — runs wind down at their next step";
+          }
         } catch (e) {
           showError(errBox, `Stop failed: ${e.message || e}`);
           stop.disabled = false;
-          stop.textContent = "■ Stop batch";
+          stop.textContent = label;
         }
       };
       bar.append(el("span", "spacer"), stop);
