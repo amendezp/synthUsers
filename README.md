@@ -66,6 +66,11 @@ Preset studies (the friction lab) and past sessions sit below the fold.
   `cancelled`), unstarted runs are skipped, and metrics/report are built from
   whatever finished. CLI batches stop the same way:
   `touch runs/<batch_dir>/cancel.requested`.
+- **Stuck batches recover themselves**: if a deploy restart or crash kills a
+  batch worker mid-run, the dashboard finalizes the batch from its recorded
+  runs (sweeps at boot and every 5 minutes; interrupted runs are marked and
+  kept). A stale batch page also offers *Finalize stuck batch*, and the CLI
+  equivalent is `synthusers report runs/<batch_dir> --finalize`.
 - Specs marked `hidden: true` (test fixtures) stay out of the preset cards.
 
 ### Deploy (Railway / Fly / Render / any Docker host)
