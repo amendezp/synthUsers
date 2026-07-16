@@ -29,6 +29,10 @@ def main(argv: list[str] | None = None) -> int:
                        help="re-run the LLM judge over each recorded run (fixes "
                             "wrong verdicts without re-running agents; needs "
                             "ANTHROPIC_API_KEY)")
+    p_rep.add_argument("--finalize", action="store_true",
+                       help="close out runs whose worker died mid-flight "
+                            "(synthesizes meta for trace-only runs) before "
+                            "rebuilding metrics — recovers stuck batches")
 
     p_lab = sub.add_parser("serve-lab", help="serve the friction-lab demo app")
     p_lab.add_argument("--port", type=int, default=8734)
@@ -48,8 +52,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "report":
-        from .batch import regenerate
-        path = regenerate(pathlib.Path(args.batch_dir), rejudge=args.rejudge)
+        from .batch import regenerate, synthesize_orphan_metas
+        batch_dir = pathlib.Path(args.batch_dir)
+        if args.finalize:
+            synthesize_orphan_metas(batch_dir)
+        path = regenerate(batch_dir, rejudge=args.rejudge)
         print(f"Report: {path}")
         return 0
 
